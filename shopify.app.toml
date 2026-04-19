@@ -2,7 +2,7 @@
 
 client_id = "2478d2bb19b6577264c0d61d7eac380b"
 name = "Bulk Page Importer"
-application_url = "https://example.com"
+application_url = "https://bulk-importer-app.onrender.com"
 embedded = true
 
 [build]
@@ -27,7 +27,11 @@ optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ ]
+redirect_urls = [
+  "https://bulk-importer-app.onrender.com/auth/callback",
+  "https://bulk-importer-app.onrender.com/auth/shopify/callback",
+  "https://bulk-importer-app.onrender.com/api/auth/callback"
+]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
