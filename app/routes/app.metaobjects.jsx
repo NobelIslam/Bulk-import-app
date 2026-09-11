@@ -14,32 +14,54 @@ const PAGE_SIZE = 250;
 const MAX_ENTRIES = 2000; // safety cap; UI surfaces a "truncated" notice rather than silently dropping rows
 const CHUNK_SIZE = 15; // rows per save request, batched via aliased mutations
 
+// The GraphQL client throws on any top-level `errors` in the response body (e.g. ACCESS_DENIED
+// for a missing scope) even though the HTTP status is 200. Node's console.log truncates the
+// nested error object as "[Array]", which makes these unreadable in server logs — pull out a
+// flat, loggable message instead.
+function describeGraphQLError(err) {
+  const first = err?.graphQLErrors?.[0];
+  if (first) {
+    const code = first.extensions?.code;
+    return code ? `${first.message} (${code})` : first.message;
+  }
+  return err?.message || "Something went wrong loading data from Shopify.";
+}
+
+const EMPTY_RESULT = { definitions: [], selectedType: "", fieldDefinitions: [], entries: [], truncated: false };
+
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
   const url = new URL(request.url);
   const type = url.searchParams.get("type") || "";
 
-  const defsResponse = await admin.graphql(`#graphql
-    query MetaobjectDefinitions {
-      metaobjectDefinitions(first: 100) {
-        nodes {
-          id
-          type
-          name
-          fieldDefinitions {
-            key
+  let definitions;
+  try {
+    const defsResponse = await admin.graphql(`#graphql
+      query MetaobjectDefinitions {
+        metaobjectDefinitions(first: 100) {
+          nodes {
+            id
+            type
             name
-            required
-            type { name }
+            fieldDefinitions {
+              key
+              name
+              required
+              type { name }
+            }
           }
         }
-      }
-    }`);
-  const { data: defsData } = await defsResponse.json();
-  const definitions = defsData?.metaobjectDefinitions?.nodes || [];
+      }`);
+    const { data: defsData } = await defsResponse.json();
+    definitions = defsData?.metaobjectDefinitions?.nodes || [];
+  } catch (err) {
+    const message = describeGraphQLError(err);
+    console.error("MetaobjectDefinitions query failed:", message);
+    return { ...EMPTY_RESULT, selectedType: type, loadError: message };
+  }
 
   if (!type) {
-    return { definitions, selectedType: "", fieldDefinitions: [], entries: [], truncated: false };
+    return { ...EMPTY_RESULT, definitions };
   }
 
   const selectedDef = definitions.find((d) => d.type === type);
@@ -49,27 +71,33 @@ export const loader = async ({ request }) => {
   let cursor = null;
   let hasNextPage = true;
 
-  while (hasNextPage && entries.length < MAX_ENTRIES) {
-    const response = await admin.graphql(
-      `#graphql
-      query MetaobjectEntries($type: String!, $first: Int!, $after: String) {
-        metaobjects(type: $type, first: $first, after: $after) {
-          nodes {
-            id
-            handle
-            fields { key value }
+  try {
+    while (hasNextPage && entries.length < MAX_ENTRIES) {
+      const response = await admin.graphql(
+        `#graphql
+        query MetaobjectEntries($type: String!, $first: Int!, $after: String) {
+          metaobjects(type: $type, first: $first, after: $after) {
+            nodes {
+              id
+              handle
+              fields { key value }
+            }
+            pageInfo { hasNextPage endCursor }
           }
-          pageInfo { hasNextPage endCursor }
-        }
-      }`,
-      { variables: { type, first: PAGE_SIZE, after: cursor } }
-    );
-    const { data } = await response.json();
-    const connection = data?.metaobjects;
-    if (!connection) break;
-    entries.push(...connection.nodes);
-    hasNextPage = connection.pageInfo.hasNextPage;
-    cursor = connection.pageInfo.endCursor;
+        }`,
+        { variables: { type, first: PAGE_SIZE, after: cursor } }
+      );
+      const { data } = await response.json();
+      const connection = data?.metaobjects;
+      if (!connection) break;
+      entries.push(...connection.nodes);
+      hasNextPage = connection.pageInfo.hasNextPage;
+      cursor = connection.pageInfo.endCursor;
+    }
+  } catch (err) {
+    const message = describeGraphQLError(err);
+    console.error("MetaobjectEntries query failed:", message);
+    return { definitions, selectedType: type, fieldDefinitions, entries: [], truncated: false, loadError: message };
   }
 
   const truncated = hasNextPage;
@@ -438,6 +466,26 @@ export default function MetaobjectEditor() {
         <s-button slot="primary-action" onClick={handleSave}>
           Save {dirtyRowCount} change{dirtyRowCount !== 1 ? "s" : ""}
         </s-button>
+      )}
+
+      {/* ── Load error ────────────────────────────────────────────────────── */}
+      {loaderData.loadError && (
+        <s-section heading="Couldn't load data from Shopify">
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              alignItems: "flex-start",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              background: "#fff4f4",
+              border: "1px solid #ffd2d2",
+            }}
+          >
+            <span style={{ fontSize: "16px", lineHeight: 1, flexShrink: 0 }}>⚠</span>
+            <s-text>{loaderData.loadError}</s-text>
+          </div>
+        </s-section>
       )}
 
       {/* ── Saving progress ───────────────────────────────────────────────── */}
