@@ -1,15 +1,28 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
 // A spreadsheet-style editable table.
 //
-// columns: [{ key, label, control: "text"|"textarea"|"number"|"boolean"|"date"|"readonly", required? }]
-// rows:    [{ id, handle, values: { [key]: string } }]
+// columns: [{ key, label, control: "text"|"textarea"|"number"|"boolean"|"date"|"readonly", required?, distinctValues?: string[] }]
+//   distinctValues, when present, turns on an Excel-style filter checklist for that column.
+// rows:    [{ id, handle, values: { [key]: string } }] — already paginated by the caller
 // dirtyKeys: Set of `${rowId}::${key}` for highlighting changed cells
 // onCellChange(rowId, key, value): fired for every edit, including each cell touched by a paste
+// columnFilters: { [key]: Set<string> } — present only for columns actively narrowed
+// onToggleFilterValue(key, value) / onSelectAllFilter(key) / onClearAllFilter(key)
 //
-// Purely controlled/presentational — the caller owns row values and dirty tracking.
-export default function EditableGrid({ columns, rows, dirtyKeys, onCellChange }) {
+// Purely controlled/presentational — the caller owns row values, dirty tracking, and filtering.
+export default function EditableGrid({
+  columns,
+  rows,
+  dirtyKeys,
+  onCellChange,
+  columnFilters = {},
+  onToggleFilterValue,
+  onSelectAllFilter,
+  onClearAllFilter,
+}) {
   const cellRefs = useRef({}); // `${rowIndex}-${colIndex}` -> element
+  const [openFilterKey, setOpenFilterKey] = useState(null);
 
   const setCellRef = useCallback((rowIndex, colIndex, el) => {
     const refKey = `${rowIndex}-${colIndex}`;
@@ -61,17 +74,66 @@ export default function EditableGrid({ columns, rows, dirtyKeys, onCellChange })
         <thead>
           <tr>
             <th style={thStyle}>Handle</th>
-            {columns.map((col) => (
-              <th key={col.key} style={thStyle}>
-                {col.label}
-                {col.required && <span style={{ color: "#d72c0d", marginLeft: "4px" }}>*</span>}
-                {col.control === "readonly" && (
-                  <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 400, color: "#8c9196" }} title="Not editable in this version">
-                    (read-only)
-                  </span>
-                )}
-              </th>
-            ))}
+            {columns.map((col) => {
+              const isFilterable = Array.isArray(col.distinctValues);
+              const allowed = columnFilters[col.key];
+              const isFiltered = allowed !== undefined;
+              const isChecked = (v) => !allowed || allowed.has(v);
+
+              return (
+                <th key={col.key} style={{ ...thStyle, position: "relative" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span>
+                      {col.label}
+                      {col.required && <span style={{ color: "#d72c0d", marginLeft: "4px" }}>*</span>}
+                      {col.control === "readonly" && (
+                        <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 400, color: "#8c9196" }} title="Not editable in this version">
+                          (read-only)
+                        </span>
+                      )}
+                    </span>
+                    {isFilterable && (
+                      <button
+                        type="button"
+                        onClick={() => setOpenFilterKey(openFilterKey === col.key ? null : col.key)}
+                        title="Filter"
+                        style={filterButtonStyle(isFiltered)}
+                      >
+                        ▾
+                      </button>
+                    )}
+                  </div>
+
+                  {isFilterable && openFilterKey === col.key && (
+                    <>
+                      <div style={backdropStyle} onClick={() => setOpenFilterKey(null)} />
+                      <div style={popoverStyle}>
+                        <div style={{ display: "flex", gap: "8px", marginBottom: "6px" }}>
+                          <button type="button" style={popoverLinkStyle} onClick={() => onSelectAllFilter(col.key)}>
+                            Select all
+                          </button>
+                          <button type="button" style={popoverLinkStyle} onClick={() => onClearAllFilter(col.key)}>
+                            Clear
+                          </button>
+                        </div>
+                        <div style={{ maxHeight: "220px", overflowY: "auto" }}>
+                          {col.distinctValues.map((v) => (
+                            <label key={v || "__blank"} style={popoverRowStyle}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked(v)}
+                                onChange={() => onToggleFilterValue(col.key, v)}
+                              />
+                              <span style={{ fontWeight: 400 }}>{v || "(blank)"}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -157,6 +219,59 @@ const tdStyle = {
   padding: "8px 12px",
   borderBottom: "1px solid #f1f2f3",
   verticalAlign: "middle",
+};
+
+const filterButtonStyle = (isFiltered) => ({
+  border: "none",
+  background: isFiltered ? "#2c6ecb" : "transparent",
+  color: isFiltered ? "#fff" : "#6d7175",
+  borderRadius: "3px",
+  width: "18px",
+  height: "18px",
+  lineHeight: "18px",
+  fontSize: "10px",
+  cursor: "pointer",
+  flexShrink: 0,
+});
+
+const backdropStyle = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10,
+};
+
+const popoverStyle = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  marginTop: "4px",
+  background: "#fff",
+  border: "1px solid #c9cccf",
+  borderRadius: "6px",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+  padding: "10px",
+  minWidth: "180px",
+  zIndex: 11,
+  fontWeight: 400,
+  textTransform: "none",
+};
+
+const popoverLinkStyle = {
+  border: "none",
+  background: "none",
+  color: "#2c6ecb",
+  fontSize: "12px",
+  cursor: "pointer",
+  padding: 0,
+};
+
+const popoverRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  fontSize: "13px",
+  padding: "3px 0",
+  cursor: "pointer",
 };
 
 const inputStyle = (isDirty) => ({

@@ -13,6 +13,7 @@ import EditableGrid from "../components/EditableGrid";
 const PAGE_SIZE = 250;
 const MAX_ENTRIES = 2000; // safety cap; UI surfaces a "truncated" notice rather than silently dropping rows
 const CHUNK_SIZE = 15; // rows per save request, batched via aliased mutations
+const PAGE_ROWS = 50; // grid rows per page, applied after search/filter
 
 // The GraphQL client throws on any top-level `errors` in the response body (e.g. ACCESS_DENIED
 // for a missing scope) even though the HTTP status is 200. Node's console.log truncates the
@@ -237,11 +238,19 @@ export default function MetaobjectEditor() {
   const [dirty, setDirty] = useState({}); // "rowId::fieldKey" -> pending value
   const originalValuesRef = useRef(buildOriginalValues(loaderData.entries, loaderData.fieldDefinitions));
 
+  // Search / column filters / pagination — all client-side over the already-loaded rows.
+  const [searchTerm, setSearchTerm] = useState("");
+  const [columnFilters, setColumnFilters] = useState({}); // { [fieldKey]: Set<string> } — present only when actively narrowed
+  const [page, setPage] = useState(1);
+
   if (datasetKey !== loaderData.selectedType) {
     setDatasetKey(loaderData.selectedType);
     setRows(buildRows(loaderData.entries, loaderData.fieldDefinitions));
     setDirty({});
     originalValuesRef.current = buildOriginalValues(loaderData.entries, loaderData.fieldDefinitions);
+    setSearchTerm("");
+    setColumnFilters({});
+    setPage(1);
   }
 
   const dirtyKeys = useMemo(() => new Set(Object.keys(dirty)), [dirty]);
@@ -249,6 +258,31 @@ export default function MetaobjectEditor() {
     () => new Set(Object.keys(dirty).map((k) => k.split("::")[0])).size,
     [dirty]
   );
+
+  const columnsWithFilters = useMemo(
+    () =>
+      columns.map((col) => {
+        const set = new Set(rows.map((r) => r.values[col.key] ?? ""));
+        return { ...col, distinctValues: [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) };
+      }),
+    [columns, rows]
+  );
+
+  const filteredRows = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return rows.filter((row) => {
+      for (const [key, allowed] of Object.entries(columnFilters)) {
+        if (!allowed.has(row.values[key] ?? "")) return false;
+      }
+      if (!term) return true;
+      if (row.handle.toLowerCase().includes(term)) return true;
+      return columns.some((c) => (row.values[c.key] ?? "").toLowerCase().includes(term));
+    });
+  }, [rows, searchTerm, columnFilters, columns]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_ROWS));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = filteredRows.slice((currentPage - 1) * PAGE_ROWS, currentPage * PAGE_ROWS);
 
   // Sequential save queue — chunks of changed rows, driven by fetcher idle transitions.
   const queueRef = useRef([]);
@@ -393,9 +427,51 @@ export default function MetaobjectEditor() {
     setDirty({});
   }, [loaderData.entries, loaderData.fieldDefinitions]);
 
+  const handleSearchChange = useCallback((value) => {
+    setSearchTerm(value);
+    setPage(1);
+  }, []);
+
+  const handleToggleFilterValue = useCallback(
+    (key, value) => {
+      setColumnFilters((prev) => {
+        const distinctValues = columnsWithFilters.find((c) => c.key === key)?.distinctValues || [];
+        const current = new Set(prev[key] ? [...prev[key]] : distinctValues);
+        if (current.has(value)) current.delete(value);
+        else current.add(value);
+
+        const next = { ...prev };
+        if (current.size >= distinctValues.length) delete next[key];
+        else next[key] = current;
+        return next;
+      });
+      setPage(1);
+    },
+    [columnsWithFilters]
+  );
+
+  const handleSelectAllFilter = useCallback((key) => {
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setPage(1);
+  }, []);
+
+  const handleClearAllFilter = useCallback((key) => {
+    setColumnFilters((prev) => ({ ...prev, [key]: new Set() }));
+    setPage(1);
+  }, []);
+
+  const handlePageChange = useCallback(
+    (next) => setPage(Math.min(Math.max(1, next), pageCount)),
+    [pageCount]
+  );
+
   const handleExportCSV = useCallback(() => {
     const header = ["Handle", ...columns.map((c) => c.label)];
-    const data = rows.map((r) => [r.handle, ...columns.map((c) => r.values[c.key] ?? "")]);
+    const data = filteredRows.map((r) => [r.handle, ...columns.map((c) => r.values[c.key] ?? "")]);
     const csv = toCSV(header, data);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -406,7 +482,7 @@ export default function MetaobjectEditor() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [columns, rows, loaderData.selectedType]);
+  }, [columns, filteredRows, loaderData.selectedType]);
 
   const handleImportFile = useCallback(
     (file) => {
@@ -463,7 +539,7 @@ export default function MetaobjectEditor() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <s-page heading="Metaobject Editor">
+    <s-page heading="Metaobject Editor" inlineSize="large">
       {dirtyRowCount > 0 && showGrid && (
         <s-button slot="primary-action" onClick={handleSave}>
           Save {dirtyRowCount} change{dirtyRowCount !== 1 ? "s" : ""}
@@ -587,8 +663,16 @@ export default function MetaobjectEditor() {
               <s-text>This metaobject type has no entries yet.</s-text>
             ) : (
               <>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder="Search handle or any field value…"
+                  style={{ padding: "8px 12px", fontSize: "14px", borderRadius: "6px", border: "1px solid #c9cccf", maxWidth: "360px" }}
+                />
+
                 <s-stack direction="inline" gap="base">
-                  <s-button onClick={handleExportCSV}>Export CSV</s-button>
+                  <s-button onClick={handleExportCSV}>Export CSV ({filteredRows.length})</s-button>
                   <s-button onClick={() => importFileRef.current?.click()}>Import CSV</s-button>
                   {dirtyRowCount > 0 && (
                     <s-button variant="tertiary" onClick={handleDiscard}>
@@ -607,7 +691,39 @@ export default function MetaobjectEditor() {
                   />
                 </s-stack>
 
-                <EditableGrid columns={columns} rows={rows} dirtyKeys={dirtyKeys} onCellChange={handleCellChange} />
+                {filteredRows.length === 0 ? (
+                  <s-text>No rows match your search/filters.</s-text>
+                ) : (
+                  <>
+                    <EditableGrid
+                      columns={columnsWithFilters}
+                      rows={pageRows}
+                      dirtyKeys={dirtyKeys}
+                      onCellChange={handleCellChange}
+                      columnFilters={columnFilters}
+                      onToggleFilterValue={handleToggleFilterValue}
+                      onSelectAllFilter={handleSelectAllFilter}
+                      onClearAllFilter={handleClearAllFilter}
+                    />
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <s-text>
+                        Showing {(currentPage - 1) * PAGE_ROWS + 1}–{Math.min(currentPage * PAGE_ROWS, filteredRows.length)} of {filteredRows.length}
+                      </s-text>
+                      <s-stack direction="inline" gap="tight">
+                        <s-button variant="tertiary" disabled={currentPage <= 1} onClick={() => handlePageChange(currentPage - 1)}>
+                          Previous
+                        </s-button>
+                        <s-text>
+                          Page {currentPage} of {pageCount}
+                        </s-text>
+                        <s-button variant="tertiary" disabled={currentPage >= pageCount} onClick={() => handlePageChange(currentPage + 1)}>
+                          Next
+                        </s-button>
+                      </s-stack>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </s-stack>
@@ -615,7 +731,7 @@ export default function MetaobjectEditor() {
       )}
 
       {/* ── Aside ─────────────────────────────────────────────────────────── */}
-      <s-section slot="aside" heading="Tips">
+      <s-section heading="Tips">
         <s-stack direction="block" gap="base">
           <s-paragraph>
             Click a cell to edit it. Paste a block of cells copied from Excel or Google Sheets directly into the grid to fill many rows at once.
