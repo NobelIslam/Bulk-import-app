@@ -21,8 +21,10 @@ const CHUNK_SIZE = 15; // rows per save request, batched via aliased mutations
 function describeGraphQLError(err) {
   const first = err?.graphQLErrors?.[0];
   if (first) {
-    const code = first.extensions?.code;
-    return code ? `${first.message} (${code})` : first.message;
+    const extra = first.extensions && Object.keys(first.extensions).length
+      ? ` | extensions: ${JSON.stringify(first.extensions)}`
+      : "";
+    return `${first.message}${extra}`;
   }
   return err?.message || "Something went wrong loading data from Shopify.";
 }
