@@ -9,8 +9,10 @@ import { useCallback, useRef, useState } from "react";
 // onCellChange(rowId, key, value): fired for every edit, including each cell touched by a paste
 // columnFilters: { [key]: Set<string> } — present only for columns actively narrowed
 // onToggleFilterValue(key, value) / onSelectAllFilter(key) / onClearAllFilter(key)
+// selectedIds: Set<string> of selected row ids (may include ids beyond this page)
+// onToggleRow(rowId) / onTogglePage(checked) — checked applies to every row currently passed in `rows`
 //
-// Purely controlled/presentational — the caller owns row values, dirty tracking, and filtering.
+// Purely controlled/presentational — the caller owns row values, dirty tracking, filtering, and selection.
 export default function EditableGrid({
   columns,
   rows,
@@ -20,6 +22,9 @@ export default function EditableGrid({
   onToggleFilterValue,
   onSelectAllFilter,
   onClearAllFilter,
+  selectedIds = new Set(),
+  onToggleRow,
+  onTogglePage,
 }) {
   const cellRefs = useRef({}); // `${rowIndex}-${colIndex}` -> element
   const [openFilterKey, setOpenFilterKey] = useState(null);
@@ -68,11 +73,22 @@ export default function EditableGrid({
     });
   };
 
+  const pageAllSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
+  const pageSomeSelected = !pageAllSelected && rows.some((r) => selectedIds.has(r.id));
+
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
         <thead>
           <tr>
+            <th style={{ ...thStyle, width: "32px" }}>
+              <input
+                type="checkbox"
+                checked={pageAllSelected}
+                ref={(el) => el && (el.indeterminate = pageSomeSelected)}
+                onChange={(e) => onTogglePage(e.target.checked)}
+              />
+            </th>
             <th style={thStyle}>Handle</th>
             {columns.map((col) => {
               const isFilterable = Array.isArray(col.distinctValues);
@@ -139,6 +155,9 @@ export default function EditableGrid({
         <tbody>
           {rows.map((row, rowIndex) => (
             <tr key={row.id} style={{ background: rowIndex % 2 === 0 ? "#fff" : "#fafbfb" }}>
+              <td style={tdStyle}>
+                <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => onToggleRow(row.id)} />
+              </td>
               <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "12px", color: "#6d7175", whiteSpace: "nowrap" }}>
                 {row.handle}
               </td>

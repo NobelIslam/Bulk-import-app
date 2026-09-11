@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, useDeferredValue } from "react";
 import { useFetcher, useLoaderData, useNavigate } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -212,6 +212,15 @@ function chunkArray(arr, size) {
   return out;
 }
 
+const linkButtonStyle = {
+  border: "none",
+  background: "none",
+  color: "#2c6ecb",
+  fontSize: "13px",
+  cursor: "pointer",
+  padding: 0,
+};
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MetaobjectEditor() {
@@ -243,6 +252,11 @@ export default function MetaobjectEditor() {
   const [columnFilters, setColumnFilters] = useState({}); // { [fieldKey]: Set<string> } — present only when actively narrowed
   const [page, setPage] = useState(1);
 
+  // Row selection (spans pages/filters) + the bulk-edit panel it drives.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkEditColumnKey, setBulkEditColumnKey] = useState("");
+  const [bulkEditValue, setBulkEditValue] = useState("");
+
   if (datasetKey !== loaderData.selectedType) {
     setDatasetKey(loaderData.selectedType);
     setRows(buildRows(loaderData.entries, loaderData.fieldDefinitions));
@@ -251,6 +265,9 @@ export default function MetaobjectEditor() {
     setSearchTerm("");
     setColumnFilters({});
     setPage(1);
+    setSelectedIds(new Set());
+    setBulkEditColumnKey("");
+    setBulkEditValue("");
   }
 
   const dirtyKeys = useMemo(() => new Set(Object.keys(dirty)), [dirty]);
@@ -268,8 +285,11 @@ export default function MetaobjectEditor() {
     [columns, rows]
   );
 
+  // Deferred so the search input never waits on re-filtering 1000+ rows before repainting each keystroke.
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+
   const filteredRows = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = deferredSearchTerm.trim().toLowerCase();
     return rows.filter((row) => {
       for (const [key, allowed] of Object.entries(columnFilters)) {
         if (!allowed.has(row.values[key] ?? "")) return false;
@@ -278,7 +298,7 @@ export default function MetaobjectEditor() {
       if (row.handle.toLowerCase().includes(term)) return true;
       return columns.some((c) => (row.values[c.key] ?? "").toLowerCase().includes(term));
     });
-  }, [rows, searchTerm, columnFilters, columns]);
+  }, [rows, deferredSearchTerm, columnFilters, columns]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_ROWS));
   const currentPage = Math.min(page, pageCount);
@@ -532,6 +552,58 @@ export default function MetaobjectEditor() {
     [columns, rows, handleCellChange, shopify]
   );
 
+  const handleToggleRow = useCallback((rowId) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  }, []);
+
+  const handleTogglePage = useCallback((visibleIds, checked) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      visibleIds.forEach((id) => (checked ? next.add(id) : next.delete(id)));
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllFiltered = useCallback(() => {
+    setSelectedIds(new Set(filteredRows.map((r) => r.id)));
+  }, [filteredRows]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setBulkEditColumnKey("");
+    setBulkEditValue("");
+  }, []);
+
+  const bulkEditableColumns = useMemo(() => columns.filter((c) => c.control !== "readonly"), [columns]);
+  const bulkEditColumn = bulkEditableColumns.find((c) => c.key === bulkEditColumnKey);
+
+  const handleApplyBulkEdit = useCallback(() => {
+    if (!bulkEditColumn || selectedIds.size === 0) return;
+    const key = bulkEditColumn.key;
+    const value = bulkEditValue;
+
+    setRows((prev) => prev.map((r) => (selectedIds.has(r.id) ? { ...r, values: { ...r.values, [key]: value } } : r)));
+
+    setDirty((prev) => {
+      const next = { ...prev };
+      selectedIds.forEach((id) => {
+        const dirtyKey = `${id}::${key}`;
+        if (originalValuesRef.current[dirtyKey] === value) delete next[dirtyKey];
+        else next[dirtyKey] = value;
+      });
+      return next;
+    });
+
+    shopify.toast.show(
+      `Staged "${value}" on ${bulkEditColumn.label} for ${selectedIds.size} row${selectedIds.size !== 1 ? "s" : ""}. Review and Save changes.`
+    );
+  }, [bulkEditColumn, bulkEditValue, selectedIds, shopify]);
+
   const progressPercent = saveState?.total ? Math.round((saveState.current / saveState.total) * 100) : 0;
   const handleFor = (id) => rows.find((r) => r.id === id)?.handle || id;
   const selectedDefinition = loaderData.definitions.find((d) => d.type === loaderData.selectedType);
@@ -695,6 +767,62 @@ export default function MetaobjectEditor() {
                   <s-text>No rows match your search/filters.</s-text>
                 ) : (
                   <>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                      <s-text>{selectedIds.size} selected</s-text>
+                      <button type="button" style={linkButtonStyle} onClick={handleSelectAllFiltered}>
+                        Select all {filteredRows.length} filtered rows
+                      </button>
+                      {selectedIds.size > 0 && (
+                        <button type="button" style={linkButtonStyle} onClick={handleClearSelection}>
+                          Clear selection
+                        </button>
+                      )}
+                    </div>
+
+                    {selectedIds.size > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "12px 16px", borderRadius: "8px", background: "#f0f4ff", border: "1px solid #c4d4f7" }}>
+                        <s-text emphasis="bold">Bulk edit {selectedIds.size} row{selectedIds.size !== 1 ? "s" : ""}:</s-text>
+                        <select
+                          value={bulkEditColumnKey}
+                          onChange={(e) => {
+                            setBulkEditColumnKey(e.target.value);
+                            setBulkEditValue("");
+                          }}
+                          style={{ padding: "6px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #c9cccf" }}
+                        >
+                          <option value="">Choose a field…</option>
+                          {bulkEditableColumns.map((c) => (
+                            <option key={c.key} value={c.key}>{c.label}</option>
+                          ))}
+                        </select>
+
+                        {bulkEditColumn?.control === "boolean" ? (
+                          <select
+                            value={bulkEditValue}
+                            onChange={(e) => setBulkEditValue(e.target.value)}
+                            style={{ padding: "6px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #c9cccf" }}
+                          >
+                            <option value="">Choose a value…</option>
+                            <option value="true">True</option>
+                            <option value="false">False</option>
+                          </select>
+                        ) : (
+                          <input
+                            type={bulkEditColumn?.control === "number" ? "number" : bulkEditColumn?.control === "date" ? "date" : "text"}
+                            value={bulkEditValue}
+                            onChange={(e) => setBulkEditValue(e.target.value)}
+                            placeholder="New value"
+                            disabled={!bulkEditColumn}
+                            style={{ padding: "6px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #c9cccf" }}
+                          />
+                        )}
+
+                        <s-button disabled={!bulkEditColumn} onClick={handleApplyBulkEdit}>
+                          Apply to {selectedIds.size} row{selectedIds.size !== 1 ? "s" : ""}
+                        </s-button>
+                      </div>
+                    )}
+
                     <EditableGrid
                       columns={columnsWithFilters}
                       rows={pageRows}
@@ -704,6 +832,9 @@ export default function MetaobjectEditor() {
                       onToggleFilterValue={handleToggleFilterValue}
                       onSelectAllFilter={handleSelectAllFilter}
                       onClearAllFilter={handleClearAllFilter}
+                      selectedIds={selectedIds}
+                      onToggleRow={handleToggleRow}
+                      onTogglePage={(checked) => handleTogglePage(pageRows.map((r) => r.id), checked)}
                     />
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
