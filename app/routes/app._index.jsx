@@ -3,6 +3,9 @@ import { useFetcher } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { parseCSVRows } from "../utils/csv";
+import ProgressBar from "../components/ProgressBar";
+import SummaryCard from "../components/SummaryCard";
 
 // ─── Server ──────────────────────────────────────────────────────────────────
 
@@ -99,31 +102,7 @@ function normalizeHandle(raw) {
 }
 
 function parseCSV(csvText) {
-  const normalized = csvText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const rows = [];
-  let row = [], field = "", inQuotes = false;
-
-  for (let i = 0; i < normalized.length; i++) {
-    const c = normalized[i];
-    if (c === '"') {
-      if (inQuotes && normalized[i + 1] === '"') { field += '"'; i++; }
-      else inQuotes = !inQuotes;
-    } else if (c === "," && !inQuotes) {
-      row.push(field); field = "";
-    } else if (c === "\n" && !inQuotes) {
-      row.push(field); field = "";
-      if (row.some((f) => f !== "")) rows.push(row);
-      row = [];
-    } else {
-      field += c;
-    }
-  }
-
-  if (field || row.length > 0) {
-    row.push(field);
-    if (row.some((f) => f !== "")) rows.push(row);
-  }
-
+  const rows = parseCSVRows(csvText);
   if (rows.length < 2) return [];
 
   const headers = rows[0].map((h) => COLUMN_ALIASES[h.trim()] || h.trim());
@@ -197,47 +176,6 @@ function StatusBadge({ published }) {
     }}>
       {isDraft ? "Draft" : "Published"}
     </span>
-  );
-}
-
-function SummaryCard({ value, label, color }) {
-  const colors = {
-    green:  { bg: "#d4edda", border: "#a3cfbb", text: "#155724" },
-    red:    { bg: "#f8d7da", border: "#f1aeb5", text: "#842029" },
-    yellow: { bg: "#fff3cd", border: "#ffe083", text: "#856404" },
-    grey:   { bg: "#f6f6f7", border: "#e1e3e5", text: "#6d7175" },
-  };
-  const c = colors[color] || colors.grey;
-  return (
-    <div style={{
-      flex: 1,
-      padding: "20px 16px",
-      borderRadius: "8px",
-      background: c.bg,
-      border: `1px solid ${c.border}`,
-      textAlign: "center",
-    }}>
-      <div style={{ fontSize: "36px", fontWeight: "700", color: c.text, lineHeight: 1 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: "13px", color: c.text, marginTop: "6px" }}>
-        {label}
-      </div>
-    </div>
-  );
-}
-
-function ProgressBar({ percent }) {
-  return (
-    <div style={{ height: "8px", borderRadius: "4px", background: "#e1e3e5", overflow: "hidden" }}>
-      <div style={{
-        height: "100%",
-        width: `${percent}%`,
-        background: percent === 100 ? "#008060" : "#2c6ecb",
-        borderRadius: "4px",
-        transition: "width 0.35s ease, background 0.3s ease",
-      }} />
-    </div>
   );
 }
 

@@ -22,7 +22,7 @@ api_version = "2026-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_files,write_files,read_locales,write_locales,write_products,write_locations,read_locations,read_online_store_navigation,write_online_store_navigation,read_online_store_pages,write_online_store_pages,read_content,write_content,write_theme_code,read_themes,write_themes,read_translations,write_translations"
+scopes = "read_files,write_files,read_locales,write_locales,write_products,write_locations,read_locations,read_online_store_navigation,write_online_store_navigation,read_online_store_pages,write_online_store_pages,read_content,write_content,write_theme_code,read_themes,write_themes,read_translations,write_translations,read_metaobjects,write_metaobjects"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
