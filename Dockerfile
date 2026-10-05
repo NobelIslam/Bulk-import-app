@@ -1,25 +1,30 @@
 FROM node:20-alpine
-RUN apk add --no-cache openssl
 
-EXPOSE 3000
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Render forwards dashboard env vars into the build when a matching ARG exists.
-# The placeholder default lets `prisma generate` (triggered automatically by
-# installing @prisma/client) pass schema validation even if it isn't forwarded —
-# generate only needs a syntactically valid URL, it never connects to a database.
+# Prisma generate only needs a syntactically valid URL during the image build.
+# Render provides the real DATABASE_URL at runtime.
 ARG DATABASE_URL=postgresql://user:password@localhost:5432/db
 ENV DATABASE_URL=${DATABASE_URL}
 
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 
-RUN npm ci --omit=dev && npm cache clean --force
+# Install dev dependencies for the production build.
+RUN npm ci
 
 COPY . .
 
 RUN npm run build
 
-CMD ["npm", "run", "docker-start"]
+# Remove build-only dependencies from the final image.
+RUN npm prune --omit=dev && npm cache clean --force
+
+EXPOSE 3000
+
+# Database migrations run separately through Render's pre-deploy command:
+# npm run migrate
+CMD ["npm", "run", "start"]
