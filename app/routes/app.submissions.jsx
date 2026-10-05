@@ -69,7 +69,10 @@ function formatDate(value) {
 }
 
 export default function Submissions() {
-  const loaderData = useLoaderData() || {};\n  const forms = Array.isArray(loaderData.forms) ? loaderData.forms : [];\n  const submissions = Array.isArray(loaderData.submissions) ? loaderData.submissions : [];\n  const filters = loaderData.filters || { formId: "", search: "" };
+  const loaderData = useLoaderData() || {};
+  const forms = Array.isArray(loaderData.forms) ? loaderData.forms : [];
+  const submissions = Array.isArray(loaderData.submissions) ? loaderData.submissions : [];
+  const filters = loaderData.filters || { formId: "", search: "" };
   const navigate = useNavigate();
   const fetcher = useFetcher();
   const [search, setSearch] = useState(filters.search);
