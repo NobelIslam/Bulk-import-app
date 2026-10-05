@@ -8,6 +8,8 @@ import {
   EmptyState,
   IndexTable,
   Page,
+  Card,
+  Select,
   Text,
   TextField,
 } from "@shopify/polaris";
@@ -67,7 +69,7 @@ function formatDate(value) {
 }
 
 export default function Submissions() {
-  const { forms, submissions, filters } = useLoaderData();
+  const loaderData = useLoaderData() || {};\n  const forms = Array.isArray(loaderData.forms) ? loaderData.forms : [];\n  const submissions = Array.isArray(loaderData.submissions) ? loaderData.submissions : [];\n  const filters = loaderData.filters || { formId: "", search: "" };
   const navigate = useNavigate();
   const fetcher = useFetcher();
   const [search, setSearch] = useState(filters.search);
@@ -86,7 +88,7 @@ export default function Submissions() {
       <IndexTable.Cell>
         <BlockStack gap="100">
           <Text as="span" fontWeight="semibold">
-            {submission.form.name}
+            {submission.form?.name || "Unknown form"}
           </Text>
           <Text as="span" tone="subdued" variant="bodySm">
             {previewData(submission.data)}
