@@ -14,6 +14,7 @@ function json(data, init = {}) {
 function hashIp(request) {
   const forwarded = request.headers.get("x-forwarded-for") || "";
   const ip = forwarded.split(",")[0].trim() || request.headers.get("x-real-ip") || "unknown";
+  // eslint-disable-next-line no-undef
   const secret = process.env.SHOPIFY_API_SECRET || process.env.SESSION_SECRET || "form-rate-limit";
   return crypto.createHash("sha256").update(`${ip}:${secret}`).digest("hex").slice(0, 64);
 }
