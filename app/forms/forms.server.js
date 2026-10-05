@@ -105,13 +105,18 @@ export async function updateForm(shop, formId, patch) {
 
   if (Object.keys(data).length === 0) return existing;
 
-  return db.form.update({ where: { id: formId, shop }, data });
+  // Ownership was verified by getForm(shop, formId). Prisma's update selector
+  // must use a unique field, so update by id only after that check.
+  return db.form.update({ where: { id: formId }, data });
 }
 
 export async function setFormStatus(shop, formId, status) {
   const nextStatus = status === FORM_STATUS.PUBLISHED ? FORM_STATUS.PUBLISHED : FORM_STATUS.DRAFT;
+  const existing = await getForm(shop, formId);
+  if (!existing) return null;
+
   return db.form.update({
-    where: { id: formId, shop },
+    where: { id: formId },
     data: {
       status: nextStatus,
       publishedAt: nextStatus === FORM_STATUS.PUBLISHED ? new Date() : null,
