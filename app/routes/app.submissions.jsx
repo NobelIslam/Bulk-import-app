@@ -5,10 +5,11 @@ import {
   Badge,
   BlockStack,
   Button,
-  EmptyState,
-  IndexTable,
-  Page,
   Card,
+  EmptyState,
+  InlineStack,
+  Page,
+  Select,
   Text,
   TextField,
 } from "@shopify/polaris";
@@ -29,7 +30,11 @@ export async function loader({ request }) {
     listForms(session.shop),
     listSubmissions(session.shop, { formId, search }),
   ]);
-  return { forms, submissions, filters: { formId, search } };
+  return {
+    forms: Array.isArray(forms) ? forms : [],
+    submissions: Array.isArray(submissions) ? submissions : [],
+    filters: { formId, search },
+  };
 }
 
 export async function action({ request }) {
@@ -55,16 +60,17 @@ function previewData(data) {
   return Object.values(data)
     .flatMap((value) => (Array.isArray(value) ? value : [value]))
     .filter((value) => value !== null && value !== undefined && value !== "")
-    .map((value) => typeof value === "object" ? value.name || "[file]" : String(value))
+    .map((value) => (typeof value === "object" ? value.name || "[file]" : String(value)))
     .join(" · ")
     .slice(0, 180) || "—";
 }
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat("en", {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown date" : new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export default function Submissions() {
@@ -74,7 +80,7 @@ export default function Submissions() {
   const filters = loaderData.filters || { formId: "", search: "" };
   const navigate = useNavigate();
   const fetcher = useFetcher();
-  const [search, setSearch] = useState(filters.search);
+  const [search, setSearch] = useState(filters.search || "");
 
   const refresh = (next = {}) => {
     const params = new URLSearchParams();
@@ -85,53 +91,6 @@ export default function Submissions() {
     navigate(`/app/submissions?${params.toString()}`);
   };
 
-  const rows = submissions.map((submission) => (
-    <IndexTable.Row id={submission.id} key={submission.id}>
-      <IndexTable.Cell>
-        <BlockStack gap="100">
-          <Text as="span" fontWeight="semibold">
-            {submission.form?.name || "Unknown form"}
-          </Text>
-          <Text as="span" tone="subdued" variant="bodySm">
-            {previewData(submission.data)}
-          </Text>
-        </BlockStack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Badge tone={submission.isRead ? undefined : "info"}>
-          {submission.isRead ? "Read" : "Unread"}
-        </Badge>
-      </IndexTable.Cell>
-      <IndexTable.Cell>{formatDate(submission.createdAt)}</IndexTable.Cell>
-      <IndexTable.Cell>
-        <BlockStack gap="100">
-          <Button
-            variant="plain"
-            onClick={() =>
-              fetcher.submit(
-                { intent: "read", id: submission.id, value: String(!submission.isRead) },
-                { method: "post" },
-              )
-            }
-          >
-            Mark {submission.isRead ? "unread" : "read"}
-          </Button>
-          <Button
-            variant="plain"
-            tone="critical"
-            onClick={() => {
-              if (window.confirm("Delete this submission?")) {
-                fetcher.submit({ intent: "delete", id: submission.id }, { method: "post" });
-              }
-            }}
-          >
-            Delete
-          </Button>
-        </BlockStack>
-      </IndexTable.Cell>
-    </IndexTable.Row>
-  ));
-
   return (
     <Page
       title="Submissions"
@@ -139,53 +98,97 @@ export default function Submissions() {
       primaryAction={{ content: "Forms", onAction: () => navigate("/app/forms") }}
     >
       <BlockStack gap="400">
-        <BlockStack gap="300">
-          <TextField
-            label="Search"
-            value={search}
-            onChange={setSearch}
-            onBlur={() => refresh()}
-            autoComplete="off"
-            placeholder="Search submissions"
-          />
-          <label>
-            <Text as="span" variant="bodySm" fontWeight="semibold">Filter by form</Text>
-            <select
-              aria-label="Filter by form"
-              value={filters.formId}
-              onChange={(event) => refresh({ formId: event.currentTarget.value })}
-              style={{ display: "block", maxWidth: 360, width: "100%", padding: 8, marginTop: 4 }}
-            >
-              <option value="">All forms</option>
-              {forms.map((form) => (
-                <option key={form.id} value={form.id}>{form.name}</option>
-              ))}
-            </select>
-          </label>
-        </BlockStack>
+        <Card>
+          <InlineStack gap="300" wrap align="end">
+            <div style={{ flex: "1 1 320px" }}>
+              <TextField
+                label="Search submissions"
+                value={search}
+                onChange={setSearch}
+                onBlur={() => refresh()}
+                autoComplete="off"
+                placeholder="Search by response"
+              />
+            </div>
+            <div style={{ flex: "1 1 240px" }}>
+              <Select
+                label="Filter by form"
+                options={[
+                  { label: "All forms", value: "" },
+                  ...forms.map((form) => ({ label: form.name, value: form.id })),
+                ]}
+                value={filters.formId}
+                onChange={(value) => refresh({ formId: value })}
+              />
+            </div>
+          </InlineStack>
+        </Card>
 
         {submissions.length === 0 ? (
-          <EmptyState
-            heading="No submissions yet"
-            image=""
-            action={{ content: "Create a form", onAction: () => navigate("/app/forms/new") }}
-          >
-            <p>Publish a form and submissions will appear here.</p>
-          </EmptyState>
-        ) : (
-          <Card padding="0">
-            <IndexTable
-              selectable={false}
-              itemCount={submissions.length}
-              headings={[
-                { title: "Submission" },
-                { title: "Status" },
-                { title: "Received" },
-                { title: "Actions" },
-              ]}
+          <Card>
+            <EmptyState
+              heading="No submissions yet"
+              action={{ content: "Create a form", onAction: () => navigate("/app/forms/new") }}
             >
-              {rows}
-            </IndexTable>
+              <p>Publish a form and submissions will appear here.</p>
+            </EmptyState>
+          </Card>
+        ) : (
+          <Card>
+            <BlockStack gap="0">
+              {submissions.map((submission, index) => (
+                <div
+                  key={submission.id}
+                  style={{
+                    padding: "16px 4px",
+                    borderBottom: index === submissions.length - 1 ? "0" : "1px solid #e1e3e5",
+                  }}
+                >
+                  <InlineStack gap="300" align="space-between" blockAlign="start" wrap>
+                    <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+                      <BlockStack gap="100">
+                        <Text as="h3" variant="headingMd">
+                          {submission.form?.name || "Unknown form"}
+                        </Text>
+                        <Text as="p" tone="subdued">
+                          {previewData(submission.data)}
+                        </Text>
+                        <Text as="p" tone="subdued" variant="bodySm">
+                          Received {formatDate(submission.createdAt)}
+                        </Text>
+                      </BlockStack>
+                    </div>
+                    <InlineStack gap="300" align="end" blockAlign="center" wrap>
+                      <Badge tone={submission.isRead ? undefined : "info"}>
+                        {submission.isRead ? "Read" : "Unread"}
+                      </Badge>
+                      <Button
+                        variant="plain"
+                        onClick={() =>
+                          fetcher.submit(
+                            { intent: "read", id: submission.id, value: String(!submission.isRead) },
+                            { method: "post" },
+                          )
+                        }
+                      >
+                        Mark {submission.isRead ? "unread" : "read"}
+                      </Button>
+                      <Button
+                        variant="plain"
+                        tone="critical"
+                        onClick={() => {
+                          if (window.confirm("Delete this submission?")) {
+                            fetcher.submit({ intent: "delete", id: submission.id }, { method: "post" });
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </InlineStack>
+                  </InlineStack>
+                </div>
+              ))}
+            </BlockStack>
           </Card>
         )}
       </BlockStack>
