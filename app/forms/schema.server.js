@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getFieldType, inputFields } from "./fields";
+import { getFieldType, inputFields } from "./fields.js";
 
 // ─── Public ids ──────────────────────────────────────────────────────────────
 
