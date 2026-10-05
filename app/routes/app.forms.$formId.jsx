@@ -421,6 +421,7 @@ export default function FormBuilder() {
               tabs={[
                 { id: "field", content: "Field", disabled: !selectedField },
                 { id: "form", content: "Form" },
+                { id: "design", content: "Design" },
               ]}
               selected={panelTab}
               onSelect={setPanelTab}
