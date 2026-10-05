@@ -82,7 +82,7 @@ const PLACEMENT_LABELS = {
 };
 
 export default function FormsIndex() {
-  const { forms, plan } = useLoaderData();
+  const data = useLoaderData() || {};\n  const forms = Array.isArray(data.forms) ? data.forms : [];\n  const plan = data.plan || { label: "Free", forms: 0, submissionsPerMonth: 0 };
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const shopify = useAppBridge();
@@ -165,18 +165,19 @@ export default function FormsIndex() {
           </Box>
         </EmptyState>
       ) : (
-        <IndexTable paginated={false}>
-          <IndexTable.Head>
-            <IndexTable.Row>
-              <IndexTable.Header>Form</IndexTable.Header>
-              <IndexTable.Header>Status</IndexTable.Header>
-              <IndexTable.Header>Placement</IndexTable.Header>
-              <IndexTable.Header>Submissions</IndexTable.Header>
-              <IndexTable.Header>Last updated</IndexTable.Header>
-              <IndexTable.Header></IndexTable.Header>
-            </IndexTable.Row>
-          </IndexTable.Head>
-          <IndexTable.Body>{rows}</IndexTable.Body>
+        <IndexTable
+          selectable={false}
+          itemCount={forms.length}
+          headings={[
+            { title: "Form" },
+            { title: "Status" },
+            { title: "Placement" },
+            { title: "Submissions" },
+            { title: "Last updated" },
+            { title: "Actions" },
+          ]}
+        >
+          {rows}
         </IndexTable>
       )}
 
