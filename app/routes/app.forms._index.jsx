@@ -85,7 +85,7 @@ export default function FormsIndex() {
   const { forms, plan } = useLoaderData();
   const fetcher = useFetcher();
   const navigate = useNavigate();
-  const { shopify } = useAppBridge();
+  const shopify = useAppBridge();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [renameTarget, setRenameTarget] = useState(null);
 
