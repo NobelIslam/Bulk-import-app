@@ -122,7 +122,14 @@ export default function EditableGrid({
 
                   {isFilterable && openFilterKey === col.key && (
                     <>
-                      <div style={backdropStyle} onClick={() => setOpenFilterKey(null)} />
+                      <div
+                        role="presentation"
+                        style={backdropStyle}
+                        onClick={() => setOpenFilterKey(null)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") setOpenFilterKey(null);
+                        }}
+                      />
                       <div style={popoverStyle}>
                         <div style={{ display: "flex", gap: "8px", marginBottom: "6px" }}>
                           <button type="button" style={popoverLinkStyle} onClick={() => onSelectAllFilter(col.key)}>

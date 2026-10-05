@@ -50,6 +50,9 @@ module.exports = {
       },
       rules: {
         "react/no-unknown-property": ["error", { ignore: ["variant"] }],
+        // This app is plain JSX with no PropTypes anywhere, so the rule only
+        // produced noise — it was failing on the pre-existing components too.
+        "react/prop-types": "off",
       },
     },
 

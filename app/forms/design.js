@@ -1,0 +1,253 @@
+// Design tokens + scoped CSS generation for the storefront form.
+// Tokens are stored per viewport in Prisma (`Form.desktopStyle`, `Form.mobileStyle`)
+// and rendered as CSS variables on a single form-scoped wrapper class, so nothing
+// can leak into or out of the merchant's theme.
+
+export const FONT_FAMILIES = [
+  { value: "inherit", label: "Theme font", stack: "inherit" },
+  { value: "system", label: "System", stack: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+  { value: "inter", label: "Inter", stack: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+  { value: "georgia", label: "Georgia", stack: 'Georgia, "Times New Roman", serif' },
+  { value: "helvetica", label: "Helvetica", stack: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
+  { value: "arial", label: "Arial", stack: "Arial, sans-serif" },
+];
+
+export const INPUT_STYLES = [
+  { value: "outline", label: "Outline" },
+  { value: "filled", label: "Filled" },
+  { value: "underline", label: "Underline" },
+];
+
+export const BUTTON_STYLES = [
+  { value: "solid", label: "Solid" },
+  { value: "outline", label: "Outline" },
+  { value: "text", label: "Text" },
+];
+
+export const ALIGNMENTS = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+];
+
+export const BREAKPOINT_MOBILE = 749;
+
+export const DEFAULT_DESKTOP_STYLE = {
+  fontFamily: "inherit",
+  labelFontSize: 14,
+  inputFontSize: 15,
+  headingFontSize: 20,
+  buttonFontSize: 15,
+  textColor: "#202223",
+  labelColor: "#202223",
+  backgroundColor: "#ffffff",
+  borderColor: "#c9cccf",
+  accentColor: "#005bd3",
+  buttonBackground: "#005bd3",
+  buttonTextColor: "#ffffff",
+  borderRadius: 8,
+  padding: 24,
+  gap: 16,
+  alignment: "left",
+  inputStyle: "outline",
+  buttonStyle: "solid",
+  formWidth: 640,
+  showShadow: false,
+  overlayColor: "#000000",
+  overlayOpacity: 50,
+};
+
+export const STYLE_KEYS = Object.keys(DEFAULT_DESKTOP_STYLE);
+
+export function defaultStyle() {
+  return { ...DEFAULT_DESKTOP_STYLE };
+}
+
+// Mobile overrides start empty: unset keys fall back to the desktop value.
+export function defaultMobileStyle() {
+  return {};
+}
+
+function isSet(value) {
+  return value !== undefined && value !== null && value !== "";
+}
+
+// Merges sparse mobile overrides over the desktop tokens for a viewport.
+export function resolveStyle(desktop, mobile, viewport) {
+  const base = { ...DEFAULT_DESKTOP_STYLE, ...(desktop || {}) };
+  if (viewport !== "mobile") return base;
+  const overrides = mobile || {};
+  const merged = { ...base };
+  STYLE_KEYS.forEach((key) => {
+    if (isSet(overrides[key])) merged[key] = overrides[key];
+  });
+  return merged;
+}
+
+// Only accepts known keys and clamps every numeric value, so a hand-crafted
+// save request cannot inject arbitrary CSS values.
+export function normalizeStyle(raw, base = DEFAULT_DESKTOP_STYLE) {
+  const out = {};
+  STYLE_KEYS.forEach((key) => {
+    const value = raw?.[key];
+    if (!isSet(value)) return;
+    const min = NUMERIC_RANGES[key];
+    if (min) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return;
+      out[key] = Math.min(min[1], Math.max(min[0], Math.round(num)));
+      return;
+    }
+    if (ENUM_VALUES[key] && !ENUM_VALUES[key].includes(String(value))) return;
+    if (key.match(/Color$/)) {
+      const color = String(value).trim();
+      if (!/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return;
+      out[key] = color;
+      return;
+    }
+    out[key] = String(value).slice(0, 200);
+  });
+  return { ...base, ...out };
+}
+
+const NUMERIC_RANGES = {
+  labelFontSize: [10, 32],
+  inputFontSize: [10, 32],
+  headingFontSize: [12, 48],
+  buttonFontSize: [10, 32],
+  borderRadius: [0, 40],
+  padding: [0, 96],
+  gap: [0, 48],
+  formWidth: [240, 1200],
+  overlayOpacity: [0, 90],
+};
+
+const ENUM_VALUES = {
+  fontFamily: FONT_FAMILIES.map((f) => f.value),
+  inputStyle: INPUT_STYLES.map((s) => s.value),
+  buttonStyle: BUTTON_STYLES.map((s) => s.value),
+  alignment: ALIGNMENTS.map((a) => a.value),
+};
+
+function fontStack(value) {
+  const found = FONT_FAMILIES.find((f) => f.value === value);
+  return found ? found.stack : "inherit";
+}
+
+function px(value, fallback) {
+  const num = Number(value);
+  return Number.isFinite(num) ? `${num}px` : `${fallback}px`;
+}
+
+// Emits the scoped stylesheet consumed by both the builder preview and the
+// storefront runtime. `publicId` scopes every selector.
+export function buildFormCss({ publicId, desktop, mobile }) {
+  const scope = `.tclf-form--${publicId}`;
+  const vars = (style) => {
+    const map = {
+      "--tclf-font": fontStack(style.fontFamily),
+      "--tclf-label-size": px(style.labelFontSize, 14),
+      "--tclf-input-size": px(style.inputFontSize, 15),
+      "--tclf-heading-size": px(style.headingFontSize, 20),
+      "--tclf-button-size": px(style.buttonFontSize, 15),
+      "--tclf-text": style.textColor,
+      "--tclf-label": style.labelColor,
+      "--tclf-bg": style.backgroundColor,
+      "--tclf-border": style.borderColor,
+      "--tclf-accent": style.accentColor,
+      "--tclf-button-bg": style.buttonBackground,
+      "--tclf-button-text": style.buttonTextColor,
+      "--tclf-radius": px(style.borderRadius, 8),
+      "--tclf-padding": px(style.padding, 24),
+      "--tclf-gap": px(style.gap, 16),
+      "--tclf-align": style.alignment,
+      "--tclf-width": px(style.formWidth, 640),
+      "--tclf-shadow": style.showShadow ? "0 8px 30px rgba(0,0,0,0.12)" : "none",
+      "--tclf-overlay": style.overlayColor,
+      "--tclf-overlay-opacity": String(Number(style.overlayOpacity) / 100),
+    };
+    return Object.entries(map)
+      .map(([name, value]) => `${name}:${value};`)
+      .join("");
+  };
+
+  const inputBackground =
+    (desktop?.inputStyle || DEFAULT_DESKTOP_STYLE.inputStyle) === "filled" ? "var(--tclf-bg-alt,#f6f6f7)" : "#ffffff";
+
+  const desktopCss = `
+${scope} {
+  font-family: var(--tclf-font);
+  color: var(--tclf-text);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--tclf-width);
+  margin: 0 auto;
+  text-align: var(--tclf-align);
+}
+${scope} *, ${scope} *::before, ${scope} *::after { box-sizing: inherit; }
+${scope} .tclf-grid { display: flex; flex-wrap: wrap; gap: var(--tclf-gap); }
+${scope} .tclf-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+${scope} .tclf-col[data-width="full"] { flex: 1 1 100%; }
+${scope} .tclf-col[data-width="half"] { flex: 1 1 calc(50% - (var(--tclf-gap) / 2)); }
+${scope} .tclf-col[data-width="third"] { flex: 1 1 calc(33.333% - (var(--tclf-gap) * 2 / 3)); }
+${scope} .tclf-label { font-size: var(--tclf-label-size); color: var(--tclf-label); font-weight: 500; }
+${scope} .tclf-required { color: #d72c0d; margin-inline-start: 2px; }
+${scope} .tclf-help { font-size: 12px; color: #6d7175; }
+${scope} .tclf-error { font-size: 12px; color: #d72c0d; }
+${scope} .tclf-heading { font-size: var(--tclf-heading-size); font-weight: 600; margin: 0; }
+${scope} .tclf-paragraph { margin: 0; font-size: var(--tclf-input-size); color: var(--tclf-text); }
+${scope} input[type="text"], ${scope} input[type="email"], ${scope} input[type="tel"],
+${scope} input[type="number"], ${scope} input[type="date"], ${scope} select,
+${scope} textarea, ${scope} input[type="file"] {
+  font-family: inherit;
+  font-size: var(--tclf-input-size);
+  color: var(--tclf-text);
+  background: ${inputBackground};
+  border: 1px solid var(--tclf-border);
+  border-radius: var(--tclf-radius);
+  padding: 10px 12px;
+  width: 100%;
+  min-height: 40px;
+}
+${scope} textarea { min-height: 110px; resize: vertical; }
+${scope} [data-input-style="underline"] input, ${scope} [data-input-style="underline"] select,
+${scope} [data-input-style="underline"] textarea { border-width: 0 0 1px 0; border-radius: 0; background: transparent; }
+${scope} input:focus-visible, ${scope} select:focus-visible, ${scope} textarea:focus-visible {
+  outline: 2px solid var(--tclf-accent);
+  outline-offset: 1px;
+}
+${scope} [aria-invalid="true"] { border-color: #d72c0d; }
+${scope} .tclf-choice { display: flex; align-items: flex-start; gap: 8px; font-size: var(--tclf-input-size); }
+${scope} .tclf-choice-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0; }
+${scope} .tclf-submit {
+  font-family: inherit;
+  font-size: var(--tclf-button-size);
+  border-radius: var(--tclf-radius);
+  padding: 11px 22px;
+  cursor: pointer;
+  border: 1px solid var(--tclf-button-bg);
+  background: var(--tclf-button-bg);
+  color: var(--tclf-button-text);
+}
+${scope} .tclf-submit[data-button-style="outline"] { background: transparent; color: var(--tclf-button-bg); }
+${scope} .tclf-submit[data-button-style="text"] { background: transparent; color: var(--tclf-button-bg); border-color: transparent; padding-inline: 4px; }
+${scope} .tclf-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+${scope} .tclf-hidden { display: none; }
+${scope}.tclf-card {
+  background: var(--tclf-bg);
+  border-radius: var(--tclf-radius);
+  box-shadow: var(--tclf-shadow);
+  padding: var(--tclf-padding);
+}
+${scope}.tclf-align-center .tclf-grid { justify-content: center; }
+`;
+
+  const mobileStyle = resolveStyle(desktop, mobile, "mobile");
+  const mobileCss = `
+@media (max-width: ${BREAKPOINT_MOBILE}px) {
+${scope} {${vars(mobileStyle)}}
+${scope} .tclf-col[data-width="half"], ${scope} .tclf-col[data-width="third"] { flex: 1 1 100%; }
+}
+`;
+
+  return `${vars(resolveStyle(desktop, mobile, "desktop"))}${desktopCss}${mobileCss}`;
+}

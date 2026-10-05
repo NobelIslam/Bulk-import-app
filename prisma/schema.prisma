@@ -32,3 +32,64 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+// A merchant-built form. Every query is scoped by `shop` (multi-tenant).
+model Form {
+  id           String    @id @default(cuid())
+  shop         String
+  // Short public token used on the storefront (app block setting, data-tcl-form attribute).
+  publicId     String    @unique
+  name         String
+  // DRAFT | PUBLISHED
+  status       String    @default("DRAFT")
+  templateKey  String?
+  // { version, fields[], settings{} }
+  schema       Json
+  // Design tokens for wide viewports.
+  desktopStyle Json
+  // Sparse overrides for small viewports; unset keys fall back to desktopStyle.
+  mobileStyle  Json
+  // { mode, openMode, triggers[], targets[], buttonBindings[] }
+  placement    Json
+  publishedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  submissions Submission[]
+
+  @@index([shop, status])
+  @@index([shop, updatedAt])
+}
+
+// A single form submission captured through the App Proxy endpoint.
+model Submission {
+  id     String @id @default(cuid())
+  shop   String
+  formId String
+  form   Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  // Sanitized { fieldId: value } — never raw input.
+  data   Json
+  // { pageUrl, referer, userAgent, customerId, durationMs, source }
+  meta   Json
+  isRead Boolean @default(false)
+  // Truncated sha256(ip + secret). Used for rate limiting only, never for analytics.
+  ipHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shop, formId, createdAt])
+  @@index([shop, isRead, createdAt])
+}
+
+// DB-backed rate limiting, so limits hold across multiple Render instances.
+model RateLimit {
+  id     String @id @default(cuid())
+  key    String
+  // Unix-minute bucket, used as the sliding window key.
+  bucket Int
+  count  Int    @default(0)
+
+  @@unique([key, bucket])
+  @@index([bucket])
+}
