@@ -56,11 +56,13 @@ import useBuilderHistory, {
   setSchemaSettings,
   updateField,
   updateFieldSettings,
+  setStyle,
 } from "../forms/builder-state";
 import FieldPalette from "../components/forms/FieldPalette";
 import FormPreview, { FormFieldPreview } from "../components/forms/FormPreview";
 import FieldSettings from "../components/forms/FieldSettings";
 import FormSettings from "../components/forms/FormSettings";
+import DesignSettings from "../components/forms/DesignSettings";
 import FieldIcon from "../components/forms/FieldIcon";
 import "@shopify/polaris/build/esm/styles.css";
 
@@ -140,6 +142,7 @@ export default function FormBuilder() {
   const [panelTab, setPanelTab] = useState("field");
   const [canvasTab, setCanvasTab] = useState("build");
   const [viewport, setViewport] = useState("desktop");
+  const activeStyle = viewport === "mobile" ? doc.mobileStyle : doc.desktopStyle;
   const [popupPreview, setPopupPreview] = useState(false);
   const [activeDrag, setActiveDrag] = useState(null);
   const [saveState, setSaveState] = useState("idle");
@@ -442,6 +445,19 @@ export default function FormBuilder() {
                   settings={doc.schema.settings}
                   updateSetting={(patch) => update((current) => setSchemaSettings(current, patch), "form-settings")}
                 />
+              </Tabs.Panel>
+              <Tabs.Panel id="design">
+                <BlockStack gap="200">
+                  <ButtonGroup variant="segmented">
+                    <Button pressed={viewport === "desktop"} onClick={() => setViewport("desktop")}>Desktop</Button>
+                    <Button pressed={viewport === "mobile"} onClick={() => setViewport("mobile")}>Mobile</Button>
+                  </ButtonGroup>
+                  <DesignSettings
+                    style={activeStyle}
+                    viewport={viewport}
+                    onChange={(patch) => update((current) => setStyle(current, viewport, patch), `style-${viewport}`)}
+                  />
+                </BlockStack>
               </Tabs.Panel>
             </Tabs>
           </Panel>
