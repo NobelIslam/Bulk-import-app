@@ -18,6 +18,9 @@ RUN npm ci
 
 COPY . .
 
+# Generate the Prisma client inside the final image before building or starting.
+RUN npx prisma generate
+
 RUN npm run build
 
 # Remove build-only dependencies from the final image.
