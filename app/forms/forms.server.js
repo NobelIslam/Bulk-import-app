@@ -198,3 +198,83 @@ export function getFormInputCount(form) {
 }
 
 export { FORM_STATUS };
+
+export async function countSubmissionsThisMonth(shop) {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return db.submission.count({
+    where: { shop, createdAt: { gte: start } },
+  });
+}
+
+export async function createSubmission({ shop, formId, data, meta, ipHash }) {
+  const form = await db.form.findFirst({
+    where: { id: formId, shop, status: FORM_STATUS.PUBLISHED },
+    select: { id: true },
+  });
+  if (!form) return null;
+
+  return db.submission.create({
+    data: {
+      shop,
+      formId: form.id,
+      data,
+      meta: meta || {},
+      ipHash: ipHash || null,
+    },
+  });
+}
+
+export async function listSubmissions(shop, { formId, search, from, to, take = 50, skip = 0 } = {}) {
+  const where = {
+    shop,
+    ...(formId ? { formId } : {}),
+    ...(from || to
+      ? {
+          createdAt: {
+            ...(from ? { gte: new Date(from) } : {}),
+            ...(to ? { lt: new Date(to) } : {}),
+          },
+        }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            { data: { string_contains: search } },
+            { meta: { string_contains: search } },
+          ],
+        }
+      : {}),
+  };
+
+  return db.submission.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: Math.min(Math.max(Number(take) || 50, 1), 100),
+    skip: Math.max(Number(skip) || 0, 0),
+    include: { form: { select: { id: true, name: true, publicId: true } } },
+  });
+}
+
+export async function getSubmission(shop, submissionId) {
+  return db.submission.findFirst({
+    where: { id: submissionId, shop },
+    include: { form: { select: { id: true, name: true, publicId: true } } },
+  });
+}
+
+export async function setSubmissionRead(shop, submissionId, isRead) {
+  const existing = await getSubmission(shop, submissionId);
+  if (!existing) return null;
+  return db.submission.update({
+    where: { id: submissionId },
+    data: { isRead: Boolean(isRead) },
+  });
+}
+
+export async function deleteSubmission(shop, submissionId) {
+  const result = await db.submission.deleteMany({
+    where: { id: submissionId, shop },
+  });
+  return result.count > 0;
+}
