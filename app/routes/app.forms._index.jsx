@@ -82,7 +82,9 @@ const PLACEMENT_LABELS = {
 };
 
 export default function FormsIndex() {
-  const data = useLoaderData() || {};\n  const forms = Array.isArray(data.forms) ? data.forms : [];\n  const plan = data.plan || { label: "Free", forms: 0, submissionsPerMonth: 0 };
+  const data = useLoaderData() || {};
+  const forms = Array.isArray(data.forms) ? data.forms : [];
+  const plan = data.plan || { label: "Free", forms: 0, submissionsPerMonth: 0 };
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const shopify = useAppBridge();
