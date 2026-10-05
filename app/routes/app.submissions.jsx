@@ -3,7 +3,6 @@ import { useFetcher, useLoaderData, useNavigate, useRouteError } from "react-rou
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   Badge,
-  Banner,
   BlockStack,
   Button,
   EmptyState,
