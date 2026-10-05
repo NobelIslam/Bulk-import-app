@@ -1,0 +1,17 @@
+name = "TCL Forms"
+type = "theme"
+uid = "tcl-forms-theme"
+
+[capabilities]
+network_access = true
+block_progress = true
+
+[[blocks]]
+type = "form"
+name = "TCL Form"
+target = "section"
+
+[[blocks]]
+type = "app_embed"
+name = "TCL Forms Embed"
+target = "head"
