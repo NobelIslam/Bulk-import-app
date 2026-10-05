@@ -526,6 +526,9 @@ function Canvas({
           ref={setNodeRef}
           className="tclf-grid"
           style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-start",
             gap: 12,
             minHeight: 120,
             borderRadius: 8,
