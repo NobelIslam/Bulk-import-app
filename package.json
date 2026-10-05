@@ -18,7 +18,7 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "test": "node --test"
+    "test": "node --experimental-specifier-resolution=node --test"
   },
   "type": "module",
   "engines": {
