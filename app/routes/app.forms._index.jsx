@@ -142,7 +142,7 @@ export default function FormsIndex() {
     <Page
       title="Forms"
       subtitle={`Build forms, publish them to your theme and collect submissions.`}
-      primaryAction={{ content: "Create form", url: "/app/forms/new", icon: PlusIcon }}
+      primaryAction={{ content: "Create form", icon: PlusIcon, onAction: () => navigate("/app/forms/new") }}
     >
       {lastAction && !lastAction.ok && (
         <Banner tone="critical" title="That didn't work">
@@ -154,8 +154,8 @@ export default function FormsIndex() {
         <EmptyState
           heading="Create your first form"
           content="Pick a template — contact, newsletter signup, quote request and more — or start from scratch. You can publish it to your theme without touching code."
-          primaryAction={{ content: "Create form", url: "/app/forms/new", icon: PlusIcon }}
-          secondaryAction={{ content: "Learn about templates", url: "/app/forms/new" }}
+          primaryAction={{ content: "Create form", icon: PlusIcon, onAction: () => navigate("/app/forms/new") }}
+          secondaryAction={{ content: "Learn about templates", onAction: () => navigate("/app/forms/new") }}
         >
           <Box paddingBlockStart="400">
             <Text as="p" variant="bodySm" tone="subdued">
