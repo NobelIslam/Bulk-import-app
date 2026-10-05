@@ -50,33 +50,64 @@ function PaletteItem({ field, onAddField }) {
         touchAction: "none",
       }}
     >
-      <button
-        type="button"
-        onClick={() => onAddField(field.type)}
-        aria-label={`Add ${field.label} field`}
+      <div
         style={{
           width: "100%",
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "10px 12px",
+          padding: "8px 10px",
           border: "1px solid #e1e3e5",
           borderRadius: 8,
           background: "#ffffff",
-          cursor: "pointer",
-          textAlign: "left",
-          font: "inherit",
         }}
-        {...listeners}
-        {...attributes}
       >
-        <InlineStack gap="200">
-          <FieldIcon name={field.icon} color="subdued" size={18} />
-          <Text as="span" variant="bodySm" fontWeight="medium">
-            {field.label}
-          </Text>
-        </InlineStack>
-      </button>
+        <button
+          type="button"
+          aria-label={`Drag ${field.label} field`}
+          {...listeners}
+          {...attributes}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 28,
+            height: 28,
+            border: 0,
+            borderRadius: 5,
+            background: "#f1f2f3",
+            cursor: "grab",
+            touchAction: "none",
+            fontSize: 16,
+          }}
+        >
+          ⋮⋮
+        </button>
+        <button
+          type="button"
+          onClick={() => onAddField(field.type)}
+          aria-label={`Add ${field.label} field`}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            border: 0,
+            background: "transparent",
+            cursor: "pointer",
+            textAlign: "left",
+            font: "inherit",
+            padding: 0,
+          }}
+        >
+          <InlineStack gap="200">
+            <FieldIcon name={field.icon} color="subdued" size={18} />
+            <Text as="span" variant="bodySm" fontWeight="medium">
+              {field.label}
+            </Text>
+          </InlineStack>
+        </button>
+      </div>
     </div>
   );
 }
