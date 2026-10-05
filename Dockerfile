@@ -23,8 +23,8 @@ RUN npx prisma generate
 
 RUN npm run build
 
-# Remove build-only dependencies from the final image.
-RUN npm prune --omit=dev && npm cache clean --force
+# Keep the generated Prisma client and its runtime dependencies intact.
+RUN npm cache clean --force
 
 EXPOSE 3000
 
