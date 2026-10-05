@@ -1,0 +1,10 @@
+{% assign tcl_form_id = block.settings.form_id | strip %}
+{% if tcl_form_id != blank %}
+  <div class="tcl-form-host" data-tcl-form="{{ tcl_form_id }}" data-tcl-form-mode="inline" {{ block.shopify_attributes }}></div>
+{% else %}
+  <div class="tcl-form-empty" {{ block.shopify_attributes }}>Select a form in the block settings.</div>
+{% endif %}
+
+{% schema %}
+{"name":"TCL Form","target":"section","javascript":"tcl-forms.js","stylesheet":"tcl-forms.css","settings":[{"type":"text","id":"form_id","label":"Form public ID","info":"Copy the public ID from the Forms page in the app."}]}
+{% endschema %}
