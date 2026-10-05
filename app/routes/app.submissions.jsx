@@ -9,7 +9,6 @@ import {
   IndexTable,
   Page,
   Card,
-  Select,
   Text,
   TextField,
 } from "@shopify/polaris";
@@ -149,17 +148,20 @@ export default function Submissions() {
             autoComplete="off"
             placeholder="Search submissions"
           />
-          <select
-            aria-label="Filter by form"
-            value={filters.formId}
-            onChange={(event) => refresh({ formId: event.currentTarget.value })}
-            style={{ maxWidth: 360, padding: 8 }}
-          >
-            <option value="">All forms</option>
-            {forms.map((form) => (
-              <option key={form.id} value={form.id}>{form.name}</option>
-            ))}
-          </select>
+          <label>
+            <Text as="span" variant="bodySm" fontWeight="semibold">Filter by form</Text>
+            <select
+              aria-label="Filter by form"
+              value={filters.formId}
+              onChange={(event) => refresh({ formId: event.currentTarget.value })}
+              style={{ display: "block", maxWidth: 360, width: "100%", padding: 8, marginTop: 4 }}
+            >
+              <option value="">All forms</option>
+              {forms.map((form) => (
+                <option key={form.id} value={form.id}>{form.name}</option>
+              ))}
+            </select>
+          </label>
         </BlockStack>
 
         {submissions.length === 0 ? (
@@ -171,18 +173,20 @@ export default function Submissions() {
             <p>Publish a form and submissions will appear here.</p>
           </EmptyState>
         ) : (
-          <IndexTable
-            selectable={false}
-            itemCount={submissions.length}
-            headings={[
-              { title: "Submission" },
-              { title: "Status" },
-              { title: "Received" },
-              { title: "Actions" },
-            ]}
-          >
-            {rows}
-          </IndexTable>
+          <Card padding="0">
+            <IndexTable
+              selectable={false}
+              itemCount={submissions.length}
+              headings={[
+                { title: "Submission" },
+                { title: "Status" },
+                { title: "Received" },
+                { title: "Actions" },
+              ]}
+            >
+              {rows}
+            </IndexTable>
+          </Card>
         )}
       </BlockStack>
     </Page>
