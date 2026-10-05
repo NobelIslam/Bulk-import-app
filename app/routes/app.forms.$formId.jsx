@@ -129,7 +129,7 @@ function docFromForm(form) {
 export default function FormBuilder() {
   const { form } = useLoaderData();
   const fetcher = useFetcher();
-  const { shopify } = useAppBridge();
+  const shopify = useAppBridge();
 
   const initialRef = useRef(null);
   if (!initialRef.current) initialRef.current = docFromForm(form);
