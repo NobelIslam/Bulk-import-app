@@ -34,7 +34,21 @@ const ICONS = {
   button: ButtonIcon,
 };
 
-export default function FieldIcon({ name, color, size = 20 }) {
+const COLORS = {
+  subdued: "#616161",
+  base: "#303030",
+};
+
+export default function FieldIcon({ name, color = "base", size = 20 }) {
   const Icon = ICONS[name] || TextIcon;
-  return <Icon color={color} size={size} />;
+  return (
+    <Icon
+      width={size}
+      height={size}
+      fill={COLORS[color] || color}
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block", flexShrink: 0 }}
+    />
+  );
 }

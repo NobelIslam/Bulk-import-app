@@ -67,6 +67,15 @@ import FieldIcon from "../components/forms/FieldIcon";
 import "@shopify/polaris/build/esm/styles.css";
 
 const CANVAS_DROP_ID = "tclf-canvas";
+const CANVAS_TABS = [
+  { id: "build", content: "Build" },
+  { id: "preview", content: "Preview" },
+];
+const SETTINGS_TABS = [
+  { id: "field", content: "Field" },
+  { id: "form", content: "Form" },
+  { id: "design", content: "Design" },
+];
 const AUTOSAVE_DELAY = 1500;
 
 export const loader = async ({ request, params }) => {
@@ -139,7 +148,7 @@ export default function FormBuilder() {
   const { doc, update, undo, redo, select, load, canUndo, canRedo, dirty, selectedFieldId } =
     useBuilderHistory(initialRef.current);
 
-  const [panelTab, setPanelTab] = useState("field");
+  const [panelTab, setPanelTab] = useState("form");
   const [canvasTab, setCanvasTab] = useState("build");
   const [viewport, setViewport] = useState("desktop");
   const activeStyle = viewport === "mobile" ? doc.mobileStyle : doc.desktopStyle;
@@ -155,6 +164,7 @@ export default function FormBuilder() {
 
   const fields = useMemo(() => doc.schema?.fields || [], [doc.schema]);
   const selectedField = fields.find((field) => field.id === selectedFieldId) || null;
+  const activePanelTab = panelTab === "field" && !selectedField ? "form" : panelTab;
   const published = form.status === "PUBLISHED";
 
   // ─── Saving ────────────────────────────────────────────────────────────────
@@ -332,14 +342,12 @@ export default function FormBuilder() {
 
           <Panel>
             <Tabs
-              tabs={[
-                { id: "build", content: "Build" },
-                { id: "preview", content: "Preview" },
-              ]}
-              selected={canvasTab}
-              onSelect={setCanvasTab}
-            >
-              <Tabs.Panel id="build">
+              tabs={CANVAS_TABS}
+              selected={Math.max(CANVAS_TABS.findIndex((tab) => tab.id === canvasTab), 0)}
+              onSelect={(index) => setCanvasTab(CANVAS_TABS[index].id)}
+              fitted
+            />
+            {canvasTab === "build" && (
                 <Canvas
                   formId={form.publicId}
                   css={canvasCss}
@@ -355,9 +363,10 @@ export default function FormBuilder() {
                     if (fieldId === selectedFieldId) select(null);
                   }}
                 />
-              </Tabs.Panel>
+            )}
 
-              <Tabs.Panel id="preview">
+            {canvasTab === "preview" && (
+              <Box padding="400">
                 <BlockStack gap="300">
                   <InlineStack gap="200" blockAlign="center">
                     <ButtonGroup variant="segmented">
@@ -412,21 +421,18 @@ export default function FormBuilder() {
                     </div>
                   </div>
                 </BlockStack>
-              </Tabs.Panel>
-            </Tabs>
+              </Box>
+            )}
           </Panel>
 
           <Panel>
             <Tabs
-              tabs={[
-                { id: "field", content: "Field", disabled: !selectedField },
-                { id: "form", content: "Form" },
-                { id: "design", content: "Design" },
-              ]}
-              selected={panelTab}
-              onSelect={setPanelTab}
-            >
-              <Tabs.Panel id="field">
+              tabs={SETTINGS_TABS.map((tab) => (tab.id === "field" ? { ...tab, disabled: !selectedField } : tab))}
+              selected={Math.max(SETTINGS_TABS.findIndex((tab) => tab.id === activePanelTab), 0)}
+              onSelect={(index) => setPanelTab(SETTINGS_TABS[index].id)}
+              fitted
+            />
+            {activePanelTab === "field" && (
                 <FieldSettings
                   field={selectedField}
                   otherFields={fields.filter((field) => field.id !== selectedFieldId)}
@@ -440,27 +446,27 @@ export default function FormBuilder() {
                   }}
                   onDuplicate={() => update((current) => duplicateField(current, selectedFieldId))}
                 />
-              </Tabs.Panel>
-              <Tabs.Panel id="form">
+            )}
+            {activePanelTab === "form" && (
                 <FormSettings
                   settings={doc.schema.settings}
                   updateSetting={(patch) => update((current) => setSchemaSettings(current, patch), "form-settings")}
                 />
-              </Tabs.Panel>
-              <Tabs.Panel id="design">
-                <BlockStack gap="200">
+            )}
+            {activePanelTab === "design" && (
+              <>
+                <Box paddingBlockStart="400" paddingInline="400">
                   <ButtonGroup variant="segmented">
                     <Button pressed={viewport === "desktop"} onClick={() => setViewport("desktop")}>Desktop</Button>
                     <Button pressed={viewport === "mobile"} onClick={() => setViewport("mobile")}>Mobile</Button>
                   </ButtonGroup>
-                  <DesignSettings
-                    style={activeStyle}
-                    viewport={viewport}
-                    onChange={(patch) => update((current) => setStyle(current, viewport, patch), `style-${viewport}`)}
-                  />
-                </BlockStack>
-              </Tabs.Panel>
-            </Tabs>
+                </Box>
+                <DesignSettings
+                  style={activeStyle}
+                  onChange={(patch) => update((current) => setStyle(current, viewport, patch), `style-${viewport}`)}
+                />
+              </>
+            )}
           </Panel>
         </div>
 
@@ -680,7 +686,7 @@ function CanvasField({ field, uid, submitText, buttonStyle, selected, onSelect, 
             {...attributes}
             {...listeners}
           >
-            <DragHandleIcon size={14} />
+            <DragHandleIcon width={16} height={16} fill="currentColor" />
           </button>
         </Tooltip>
         <Tooltip content="Duplicate">
@@ -693,7 +699,7 @@ function CanvasField({ field, uid, submitText, buttonStyle, selected, onSelect, 
               onDuplicate();
             }}
           >
-            <DuplicateIcon size={14} />
+            <DuplicateIcon width={16} height={16} fill="currentColor" />
           </button>
         </Tooltip>
         <Tooltip content="Delete">
