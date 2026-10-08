@@ -69,6 +69,14 @@ function TemplateCard({ template, disabled }) {
   );
 }
 
+const THUMB_WIDTHS = {
+  full: "100%",
+  threeQuarters: "calc(75% - 2px)",
+  half: "calc(50% - 3px)",
+  third: "calc(33.333% - 4px)",
+  quarter: "calc(25% - 5px)",
+};
+
 // Schematic preview: one control per field, sized by its layout role.
 function TemplateThumb({ template }) {
   const fields = (template.schema?.fields || []).slice(0, 8);
@@ -89,8 +97,7 @@ function TemplateThumb({ template }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {fields.map((field) => {
           const meta = getFieldType(field.type);
-          const width =
-            field.width === "full" ? "100%" : field.width === "half" ? "calc(50% - 3px)" : "calc(33.333% - 4px)";
+          const width = THUMB_WIDTHS[field.width] || "100%";
           return (
             <div key={field.id} style={{ width, display: "flex", flexDirection: "column", gap: 3 }}>
               {meta?.submissionKey !== false && field.type !== "submitButton" && (

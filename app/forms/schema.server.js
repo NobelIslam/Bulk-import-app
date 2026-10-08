@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getFieldType, inputFields } from "./fields.js";
+import { getFieldType, inputFields, isConditionMet } from "./fields.js";
 
 // ─── Public ids ──────────────────────────────────────────────────────────────
 
@@ -116,8 +116,12 @@ export function validateSubmission(schema, rawData) {
   const errors = {};
   const source = rawData && typeof rawData === "object" ? rawData : {};
   const fields = inputFields(schema);
+  const allFields = Array.isArray(schema?.fields) ? schema.fields : [];
 
   for (const field of fields) {
+    // A field the visitor cannot see must never block or leak into a submission.
+    if (field.visible === false || !isConditionMet(field, allFields, source)) continue;
+
     const raw = source[field.key];
     const type = field.type;
 

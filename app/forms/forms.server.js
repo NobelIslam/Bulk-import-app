@@ -98,8 +98,7 @@ export async function updateForm(shop, formId, patch) {
   if (patch.desktopStyle !== undefined) data.desktopStyle = normalizeStyle(patch.desktopStyle);
   if (patch.mobileStyle !== undefined) {
     // Mobile stays sparse so unset keys fall back to the desktop value.
-    const base = normalizeStyle(patch.desktopStyle ?? existing.desktopStyle);
-    data.mobileStyle = normalizeStyle(patch.mobileStyle, base);
+    data.mobileStyle = normalizeStyle(patch.mobileStyle, {});
   }
   if (patch.placement !== undefined) data.placement = { ...existing.placement, ...patch.placement };
 

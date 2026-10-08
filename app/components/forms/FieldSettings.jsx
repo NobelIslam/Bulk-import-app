@@ -1,270 +1,450 @@
-import { BlockStack, Box, Button, Checkbox, Divider, InlineStack, Select, Text, TextField } from "@shopify/polaris";
-import { getFieldType, WIDTH_LABELS } from "../../forms/fields";
+import { useState } from "react";
+import { Button, Select, TextField } from "@shopify/polaris";
+import { ChevronDownIcon, ChevronRightIcon, DeleteIcon, PlusIcon, XIcon } from "@shopify/polaris-icons";
+import {
+  getFieldType,
+  PATTERN_FIELD_TYPES,
+  presetForValidation,
+  SPACING_SIDES,
+  VALIDATION_PRESETS,
+  WIDTH_OPTIONS,
+} from "../../forms/fields";
 import FieldIcon from "./FieldIcon";
 
-const WIDTH_OPTIONS = Object.entries(WIDTH_LABELS).map(([value, label]) => ({ value, label }));
+const NO_PLACEHOLDER = ["heading", "paragraph", "divider", "submitButton", "checkbox", "consentCheckbox", "radio", "multiCheckbox", "hiddenField", "fileUpload", "date"];
+const NO_LABEL = ["divider"];
+const LABEL_IS_TEXT = { heading: "Heading text", paragraph: "Paragraph text", submitButton: "Button text" };
+const DEFAULT_VALUE_TYPES = ["shortText", "longText", "email", "phone", "number", "date", "dropdown", "radio", "hiddenField"];
+const LENGTH_TYPES = ["shortText", "longText"];
 
-function asString(value) {
-  if (value === null || value === undefined) return "";
-  return String(value);
+export function Switch({ checked, onChange, label, description, disabled }) {
+  return (
+    <div className="fb-switch-row">
+      <button
+        type="button"
+        role="switch"
+        className="fb-switch"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+      />
+      <div>
+        <div className="fb-switch-row__label">{label}</div>
+        {description && <p className="fb-help" style={{ marginTop: 2 }}>{description}</p>}
+      </div>
+    </div>
+  );
 }
 
-function asNumberOrBlank(value) {
-  if (value === null || value === undefined || value === "") return "";
-  return String(value);
+export function Section({ title, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
+  return (
+    <div className="fb-section">
+      <button type="button" className="fb-section__toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Chevron width={18} height={18} fill="currentColor" aria-hidden="true" />
+        {title}
+      </button>
+      {open && <div className="fb-section__body">{children}</div>}
+    </div>
+  );
 }
 
-// Right panel: per-field settings for the field selected in the canvas.
-export default function FieldSettings({ field, otherFields, onUpdate, onUpdateSection, onRemove, onDuplicate }) {
-  if (!field) {
-    return (
-      <Box padding="400">
-        <Text as="p" variant="bodySm" tone="subdued">
-          Select a field on the canvas to edit its settings.
-        </Text>
-      </Box>
-    );
-  }
+function numberOrNull(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
 
+// Right panel: settings for the field selected on the canvas.
+export default function FieldSettings({ field, otherFields, onUpdate, onUpdateSection, onRemove, onDuplicate, onClose }) {
   const meta = getFieldType(field.type);
   const isLayout = meta?.submissionKey === false;
+  const isSubmit = field.type === "submitButton";
   const conditionalSource = otherFields.find((entry) => entry.id === field.conditional?.fieldId);
+  const conditionSources = otherFields.filter((entry) => entry.key);
+  const validation = field.validation || {};
+  const preset = validation.preset === "custom" ? "custom" : presetForValidation(validation);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 16, overflowY: "auto" }}>
-      <InlineStack gap="200" align="center">
-        <FieldIcon name={meta?.icon} color="subdued" size={18} />
-        <Text as="h2" variant="headingSm">
-          {meta?.label || field.type}
-        </Text>
-      </InlineStack>
+    <>
+      <div className="fb-panel__header">
+        <h2 className="fb-panel__title">Field settings</h2>
+        <button type="button" className="fb-icon-btn" aria-label="Close field settings" onClick={onClose}>
+          <XIcon width={20} height={20} fill="currentColor" />
+        </button>
+      </div>
 
-      <BlockStack gap="300">
-        <TextField
-          label="Label"
-          value={field.label}
-          onChange={(label) => onUpdate({ label })}
-          autoComplete="off"
-        />
+      <div className="fb-panel__stack">
+        <div className="fb-typecard">
+          <span className="fb-typecard__icon">
+            <FieldIcon name={meta?.icon} size={22} />
+          </span>
+          <div>
+            <div className="fb-typecard__name">{meta?.label || field.type}</div>
+            <div className="fb-typecard__desc">{meta?.description}</div>
+          </div>
+        </div>
 
-        {field.type !== "hiddenField" && (
+        {!NO_LABEL.includes(field.type) && (
+          <TextField
+            label={LABEL_IS_TEXT[field.type] || "Label"}
+            value={field.label}
+            onChange={(label) => onUpdate({ label })}
+            autoComplete="off"
+            multiline={field.type === "paragraph" ? 3 : undefined}
+          />
+        )}
+
+        {!NO_PLACEHOLDER.includes(field.type) && (
           <TextField
             label="Placeholder"
             value={field.placeholder}
             onChange={(placeholder) => onUpdate({ placeholder })}
             autoComplete="off"
-            disabled={["heading", "paragraph", "submitButton", "checkbox", "consentCheckbox", "radio", "multiCheckbox"].includes(field.type)}
           />
         )}
 
-        <TextField
-          label="Help text"
-          value={field.helpText}
-          onChange={(helpText) => onUpdate({ helpText })}
-          autoComplete="off"
-          multiline
-          rows={2}
-          showCharacterCount
-          maxLength={300}
-        />
-      </BlockStack>
+        {!["divider", "hiddenField", "submitButton"].includes(field.type) && (
+          <TextField
+            label="Help text"
+            value={field.helpText}
+            onChange={(helpText) => onUpdate({ helpText })}
+            autoComplete="off"
+            helpText="Shown below the field to provide extra information."
+            maxLength={300}
+          />
+        )}
 
-      {!isLayout && field.type !== "consentCheckbox" && (
-        <Checkbox
-          label="Required"
-          checked={Boolean(field.required)}
-          onChange={(required) => onUpdate({ required })}
-        />
-      )}
+        {!isLayout && field.type !== "hiddenField" && (
+          <Switch
+            label="Required field"
+            description={
+              field.type === "consentCheckbox"
+                ? "Consent checkboxes must always be ticked."
+                : "Customers must fill in this field."
+            }
+            checked={field.type === "consentCheckbox" ? true : Boolean(field.required)}
+            disabled={field.type === "consentCheckbox"}
+            onChange={(required) => onUpdate({ required })}
+          />
+        )}
 
-      {["checkbox", "radio", "dropdown", "multiCheckbox", "submitButton", "hiddenField", "date", "number"].includes(field.type) && (
-        <TextField
-          label="Default value"
-          value={asString(field.defaultValue)}
-          onChange={(defaultValue) => onUpdate({ defaultValue })}
-          autoComplete="off"
-        />
-      )}
+        {field.type !== "hiddenField" && (
+          <div>
+            <span className="fb-field-label" id={`width-${field.id}`}>Field width</span>
+            <div className="fb-seg" role="group" aria-labelledby={`width-${field.id}`}>
+              {WIDTH_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={field.width === option.value}
+                  onClick={() => onUpdate({ width: option.value })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="fb-help">Fields sit side by side on wide screens and stack on phones.</p>
+          </div>
+        )}
 
-      {meta?.hasOptions && (
-        <OptionsEditor field={field} onChange={(options) => onUpdate({ options })} />
-      )}
+        {meta?.hasOptions && <OptionsEditor field={field} onChange={(options) => onUpdate({ options })} />}
 
-      <Divider />
+        {DEFAULT_VALUE_TYPES.includes(field.type) && (
+          field.type === "dropdown" || field.type === "radio" ? (
+            <Select
+              label="Default selection"
+              options={[{ label: "None", value: "" }, ...(field.options || []).map((option) => ({ label: option, value: option }))]}
+              value={field.defaultValue || ""}
+              onChange={(defaultValue) => onUpdate({ defaultValue })}
+            />
+          ) : (
+            <TextField
+              label={field.type === "hiddenField" ? "Value" : "Default value"}
+              type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+              value={field.defaultValue || ""}
+              onChange={(defaultValue) => onUpdate({ defaultValue })}
+              autoComplete="off"
+              helpText={field.type === "hiddenField" ? "Sent with every submission. Visitors never see it." : undefined}
+            />
+          )
+        )}
 
-      <BlockStack gap="300">
-        <Text as="h3" variant="headingMd">
-          Layout
-        </Text>
-        <Select
-          label="Column width"
-          options={WIDTH_OPTIONS}
-          value={field.width}
-          onChange={(width) => onUpdate({ width })}
-        />
-      </BlockStack>
+        {field.type === "checkbox" && (
+          <Switch
+            label="Ticked by default"
+            checked={field.defaultValue === "true"}
+            onChange={(checked) => onUpdate({ defaultValue: checked ? "true" : "" })}
+          />
+        )}
 
-      {!isLayout && (
-        <>
-          <Divider />
-          <ValidationEditor field={field} onChange={(patch) => onUpdateSection("validation", patch)} />
-        </>
-      )}
+        {PATTERN_FIELD_TYPES.includes(field.type) && (
+          <div>
+            <Select
+              label="Validation"
+              options={VALIDATION_PRESETS.map((entry) => ({ label: entry.label, value: entry.value }))}
+              value={preset}
+              onChange={(value) => {
+                const chosen = VALIDATION_PRESETS.find((entry) => entry.value === value);
+                if (value === "custom") {
+                  onUpdateSection("validation", { preset: "custom" });
+                } else {
+                  onUpdateSection("validation", {
+                    preset: value,
+                    pattern: chosen?.pattern || "",
+                    patternMessage: chosen?.message || "",
+                  });
+                }
+              }}
+            />
+            <p className="fb-help">Choose a validation rule for this field.</p>
+          </div>
+        )}
 
-      <Divider />
-
-      <BlockStack gap="300">
-        <Text as="h3" variant="headingMd">
-          Conditional visibility
-        </Text>
-        <Select
-          label="Show this field when"
-          options={[{ value: "", label: "Always visible" }].concat(
-            otherFields.map((entry) => ({
-              value: entry.id,
-              label: `${getFieldType(entry.type)?.label || entry.type}: ${entry.label}`,
-            })),
-          )}
-          value={field.conditional?.fieldId || ""}
-          onChange={(fieldId) =>
-            onUpdate({ conditional: fieldId ? { fieldId, equals: field.conditional?.equals || "" } : null })
-          }
-        />
-        {field.conditional?.fieldId && (
+        {PATTERN_FIELD_TYPES.includes(field.type) && preset === "custom" && (
           <>
             <TextField
-              label={`Value${conditionalSource ? ` of “${conditionalSource.label}”` : ""}`}
-              value={field.conditional.equals}
-              onChange={(equals) => onUpdate({ conditional: { ...field.conditional, equals } })}
+              label="Pattern (regular expression)"
+              value={validation.pattern || ""}
+              onChange={(pattern) => onUpdateSection("validation", { pattern, preset: "custom" })}
+              autoComplete="off"
+              monospaced
+              helpText="For example ^[A-Z]{2}[0-9]{4}$"
+            />
+            <TextField
+              label="Error message"
+              value={validation.patternMessage || ""}
+              onChange={(patternMessage) => onUpdateSection("validation", { patternMessage })}
               autoComplete="off"
             />
-            <Text as="p" variant="bodySm" tone="subdued">
-              The field stays hidden until that value matches. Leave the value blank to show it as soon as the other
-              field is answered.
-            </Text>
           </>
         )}
-      </BlockStack>
 
-      <Divider />
+        {field.type === "number" && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Minimum"
+                type="number"
+                value={validation.min ?? ""}
+                autoComplete="off"
+                onChange={(value) => onUpdateSection("validation", { min: numberOrNull(value) })}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Maximum"
+                type="number"
+                value={validation.max ?? ""}
+                autoComplete="off"
+                onChange={(value) => onUpdateSection("validation", { max: numberOrNull(value) })}
+              />
+            </div>
+          </div>
+        )}
 
-      <InlineStack gap="200">
-        <Button onClick={onDuplicate}>Duplicate</Button>
-        <Button
-          tone="critical"
-          onClick={onRemove}
-          disabled={field.type === "submitButton"}
-        >
-          Delete
+        {LENGTH_TYPES.includes(field.type) && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Min characters"
+                type="number"
+                min={0}
+                value={validation.minLength ?? ""}
+                autoComplete="off"
+                onChange={(value) => onUpdateSection("validation", { minLength: numberOrNull(value) })}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Max characters"
+                type="number"
+                min={0}
+                value={validation.maxLength ?? ""}
+                autoComplete="off"
+                onChange={(value) => onUpdateSection("validation", { maxLength: numberOrNull(value) })}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 22 }}>
+        <Section title="Layout">
+          <Select
+            label="Show this field"
+            options={[
+              { value: "", label: "Always" },
+              ...conditionSources.map((entry) => ({
+                value: entry.id,
+                label: `When “${entry.label}” is answered…`,
+              })),
+            ]}
+            value={field.conditional?.fieldId || ""}
+            onChange={(fieldId) =>
+              onUpdate({ conditional: fieldId ? { fieldId, equals: field.conditional?.equals || "" } : null })
+            }
+          />
+          {field.conditional?.fieldId &&
+            (conditionalSource?.options?.length ? (
+              <Select
+                label={`…with the value`}
+                options={[
+                  { value: "", label: "Any answer" },
+                  ...conditionalSource.options.map((option) => ({ value: option, label: option })),
+                ]}
+                value={field.conditional.equals || ""}
+                onChange={(equals) => onUpdate({ conditional: { ...field.conditional, equals } })}
+              />
+            ) : (
+              <TextField
+                label="…with the value"
+                value={field.conditional.equals || ""}
+                placeholder="Any answer"
+                autoComplete="off"
+                helpText={
+                  conditionalSource?.type === "checkbox" || conditionalSource?.type === "consentCheckbox"
+                    ? "Leave blank to show it once the box is ticked."
+                    : "Leave blank to show it as soon as the other field is answered."
+                }
+                onChange={(equals) => onUpdate({ conditional: { ...field.conditional, equals } })}
+              />
+            ))}
+          {conditionSources.length === 0 && (
+            <p className="fb-help">Add another input field to show this one conditionally.</p>
+          )}
+        </Section>
+
+        <Section title="Spacing">
+          <SpacingEditor
+            spacing={field.spacing}
+            onChange={(spacing) => onUpdate({ spacing })}
+          />
+          <p className="fb-help">In pixels, from 0 to 96.</p>
+        </Section>
+
+        <Section title="Appearance">
+          {!isLayout && !["checkbox", "consentCheckbox", "hiddenField"].includes(field.type) && (
+            <Switch
+              label="Hide label"
+              description="Keeps the label for screen readers but hides it visually."
+              checked={Boolean(field.hideLabel)}
+              onChange={(hideLabel) => onUpdate({ hideLabel })}
+            />
+          )}
+          <Switch
+            label="Show on form"
+            description="Turn off to keep the field without showing it to visitors."
+            checked={field.visible !== false}
+            disabled={isSubmit}
+            onChange={(visible) => onUpdate({ visible })}
+          />
+          <TextField
+            label="CSS class"
+            value={field.cssClass || ""}
+            onChange={(cssClass) => onUpdate({ cssClass: cssClass.replace(/[^a-zA-Z0-9_\- ]/g, "") })}
+            autoComplete="off"
+            monospaced
+            helpText="Optional. Lets your theme's CSS target this field."
+          />
+        </Section>
+      </div>
+
+      <div className="fb-panel__footer">
+        <Button onClick={onDuplicate} disabled={isSubmit}>
+          Duplicate
         </Button>
-      </InlineStack>
+        <Button tone="critical" icon={DeleteIcon} onClick={onRemove} disabled={isSubmit}>
+          Delete field
+        </Button>
+      </div>
+      {isSubmit && <p className="fb-help">Every form needs exactly one submit button.</p>}
+    </>
+  );
+}
+
+function SpacingEditor({ spacing, onChange }) {
+  const current = spacing || {};
+  const setSide = (kind, side, value) => {
+    const num = Math.max(0, Math.min(96, Number(value) || 0));
+    onChange({
+      margin: { ...(current.margin || {}) },
+      padding: { ...(current.padding || {}) },
+      [kind]: { ...(current[kind] || {}), [side]: num },
+    });
+  };
+
+  return (
+    <div className="fb-spacing">
+      {["margin", "padding"].map((kind) => (
+        <SpacingRow key={kind} kind={kind} values={current[kind] || {}} onChange={setSide} />
+      ))}
     </div>
   );
 }
 
-function OptionsEditor({ field, onChange }) {
+function SpacingRow({ kind, values, onChange }) {
+  const title = kind === "margin" ? "Margin" : "Padding";
   return (
-    <BlockStack gap="200">
-      <Text as="h3" variant="headingMd">
-        Options
-      </Text>
-      {field.options.map((option, index) => (
-        <InlineStack key={`${field.id}-option-${index}`} gap="200" align="bottom">
-          <Box width="100%">
-            <TextField
-              label={`Option ${index + 1}`}
-              labelHidden
-              value={option}
-              autoComplete="off"
-              onChange={(value) => {
-                const next = [...field.options];
-                next[index] = value;
-                onChange(next);
-              }}
-            />
-          </Box>
-          <Button
-            variant="tertiary"
-            onClick={() => onChange(field.options.filter((_, entryIndex) => entryIndex !== index))}
-          >
-            Remove
-          </Button>
-        </InlineStack>
+    <>
+      <span className="fb-spacing__label">{title}</span>
+      {SPACING_SIDES.map((side) => (
+        <label key={side} className="fb-spacing__cell">
+          <input
+            type="number"
+            min={0}
+            max={96}
+            value={values[side] ?? 0}
+            aria-label={`${title} ${side}`}
+            onChange={(event) => onChange(kind, side, event.target.value)}
+          />
+          <span>{side[0].toUpperCase() + side.slice(1)}</span>
+        </label>
       ))}
-      <Button onClick={() => onChange([...field.options, `Option ${field.options.length + 1}`])}>Add option</Button>
-    </BlockStack>
+    </>
   );
 }
 
-function ValidationEditor({ field, onChange }) {
-  const validation = field.validation || {};
-  const showLength = ["shortText", "longText", "password"].includes(field.type);
-  const showNumber = field.type === "number";
-
+function OptionsEditor({ field, onChange }) {
+  const options = field.options || [];
   return (
-    <BlockStack gap="300">
-      <Text as="h3" variant="headingMd">
-        Validation
-      </Text>
-      {showNumber && (
-        <InlineStack gap="200">
-          <Box width="100%">
-            <TextField
-              label="Minimum"
-              type="number"
-              value={asNumberOrBlank(validation.min)}
-              autoComplete="off"
-              onChange={(value) => onChange({ min: value === "" ? null : Number(value) })}
-            />
-          </Box>
-          <Box width="100%">
-            <TextField
-              label="Maximum"
-              type="number"
-              value={asNumberOrBlank(validation.max)}
-              autoComplete="off"
-              onChange={(value) => onChange({ max: value === "" ? null : Number(value) })}
-            />
-          </Box>
-        </InlineStack>
-      )}
-      {showLength && (
-        <InlineStack gap="200">
-          <Box width="100%">
-            <TextField
-              label="Min length"
-              type="number"
-              value={asNumberOrBlank(validation.minLength)}
-              autoComplete="off"
-              onChange={(value) => onChange({ minLength: value === "" ? null : Number(value) })}
-            />
-          </Box>
-          <Box width="100%">
-            <TextField
-              label="Max length"
-              type="number"
-              value={asNumberOrBlank(validation.maxLength)}
-              autoComplete="off"
-              onChange={(value) => onChange({ maxLength: value === "" ? null : Number(value) })}
-            />
-          </Box>
-        </InlineStack>
-      )}
-      <TextField
-        label="Pattern (regex)"
-        value={validation.pattern || ""}
-        autoComplete="off"
-        onChange={(pattern) => onChange({ pattern })}
-        helpText="Optional. Regular expression the value must match, for example ^[A-Z]{2}[0-9]{4}$."
-      />
-      {validation.pattern ? (
-        <TextField
-          label="Pattern error message"
-          value={validation.patternMessage || ""}
-          autoComplete="off"
-          onChange={(patternMessage) => onChange({ patternMessage })}
-        />
-      ) : null}
-    </BlockStack>
+    <div>
+      <span className="fb-field-label">Options</span>
+      <div className="fb-options">
+        {options.map((option, index) => (
+          <div key={`${field.id}-option-${index}`} className="fb-options__row">
+            <div>
+              <TextField
+                label={`Option ${index + 1}`}
+                labelHidden
+                value={option}
+                autoComplete="off"
+                onChange={(value) => {
+                  const next = [...options];
+                  next[index] = value;
+                  onChange(next);
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              className="fb-icon-btn fb-icon-btn--critical"
+              aria-label={`Remove option ${index + 1}`}
+              disabled={options.length <= 1}
+              onClick={() => onChange(options.filter((_, entryIndex) => entryIndex !== index))}
+            >
+              <DeleteIcon width={18} height={18} fill="currentColor" />
+            </button>
+          </div>
+        ))}
+        <div>
+          <Button icon={PlusIcon} onClick={() => onChange([...options, `Option ${options.length + 1}`])}>
+            Add option
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

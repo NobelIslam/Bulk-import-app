@@ -1,5 +1,5 @@
 import { useCallback, useReducer } from "react";
-import { createFieldId, defaultField, findField, slugifyKey } from "./fields";
+import { createFieldId, defaultField, findField, slugifyKey } from "./fields.js";
 
 const HISTORY_LIMIT = 60;
 
@@ -26,10 +26,32 @@ export function addField(doc, type, index = null) {
   const takenKeys = doc.schema.fields.map((field) => field.key).filter(Boolean);
   const field = defaultField(type, takenKeys);
   if (!field) return doc;
+  return insertField(doc, field, index);
+}
 
+// `index` null appends above the submit button, so new fields land inside the form.
+export function insertField(doc, field, index = null) {
+  if (doc.schema.fields.some((entry) => entry.id === field.id)) return doc;
+  if (field.key && doc.schema.fields.some((entry) => entry.key === field.key)) {
+    const takenKeys = doc.schema.fields.map((entry) => entry.key).filter(Boolean);
+    field = { ...field, key: slugifyKey(field.key, takenKeys) };
+  }
   const fields = [...doc.schema.fields];
-  const at = index === null || index < 0 || index > fields.length ? fields.length : index;
+  let at = index;
+  if (at === null || at < 0 || at > fields.length) {
+    const submitIndex = fields.findIndex((entry) => entry.type === "submitButton");
+    at = submitIndex === -1 || field.type === "submitButton" ? fields.length : submitIndex;
+  }
   fields.splice(at, 0, field);
+  return { ...doc, schema: { ...doc.schema, fields } };
+}
+
+export function moveFieldToIndex(doc, fieldId, index) {
+  const fields = [...doc.schema.fields];
+  const from = fields.findIndex((field) => field.id === fieldId);
+  if (from === -1) return doc;
+  const [moved] = fields.splice(from, 1);
+  fields.splice(Math.max(0, Math.min(index, fields.length)), 0, moved);
   return { ...doc, schema: { ...doc.schema, fields } };
 }
 
@@ -47,7 +69,7 @@ export function removeField(doc, fieldId) {
 
 export function duplicateField(doc, fieldId) {
   const field = findField(doc.schema, fieldId);
-  if (!field) return doc;
+  if (!field || field.type === "submitButton") return doc;
 
   const takenKeys = doc.schema.fields.map((entry) => entry.key).filter(Boolean);
   const index = doc.schema.fields.findIndex((entry) => entry.id === fieldId);
@@ -135,6 +157,11 @@ function reducer(state, action) {
       };
     }
 
+    // A save succeeded: the sent document becomes the clean baseline, while the
+    // current document and undo history stay untouched.
+    case "markSaved":
+      return state.baseline === action.doc ? state : { ...state, baseline: action.doc };
+
     case "select":
       return state.selectedFieldId === action.fieldId ? state : { ...state, selectedFieldId: action.fieldId };
 
@@ -144,6 +171,7 @@ function reducer(state, action) {
 }
 
 export function isDirty(state) {
+  if (state.present === state.baseline) return false;
   return JSON.stringify(state.present) !== JSON.stringify(state.baseline);
 }
 
@@ -165,6 +193,7 @@ export default function useBuilderHistory(initialDoc) {
   const redo = useCallback(() => dispatch({ type: "redo" }), []);
   const select = useCallback((fieldId) => dispatch({ type: "select", fieldId }), []);
   const load = useCallback((doc) => dispatch({ type: "load", doc }), []);
+  const markSaved = useCallback((doc) => dispatch({ type: "markSaved", doc }), []);
 
   return {
     doc: state.present,
@@ -174,6 +203,7 @@ export default function useBuilderHistory(initialDoc) {
     redo,
     select,
     load,
+    markSaved,
     canUndo: state.past.length > 0,
     canRedo: state.future.length > 0,
     dirty: isDirty(state),

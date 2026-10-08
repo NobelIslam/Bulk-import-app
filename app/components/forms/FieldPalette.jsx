@@ -1,115 +1,93 @@
+import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { BlockStack, Box, InlineStack, Text } from "@shopify/polaris";
+import { DragHandleIcon, SearchIcon } from "@shopify/polaris-icons";
 import { FIELD_GROUPS, FIELD_TYPES } from "../../forms/fields";
-import { DragHandleIcon } from "@shopify/polaris-icons";
 import FieldIcon from "./FieldIcon";
 
-// Left panel of the builder. Drag a field onto the canvas to place it, or click
-// to append it — clicking keeps the builder usable without a pointer.
-export default function FieldPalette({ onAddField }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 16, overflowY: "auto" }}>
-      <Box>
-        <Text as="h2" variant="headingSm">
-          Add a field
-        </Text>
-        <Text as="p" variant="bodySm" tone="subdued">
-          Drag onto the canvas, or click to add at the end.
-        </Text>
-      </Box>
+// Left sidebar. Click an element to append it above the submit button, or drag
+// it onto the canvas to place it exactly.
+export default function FieldPalette({ onAddField, disabledTypes = {} }) {
+  const [query, setQuery] = useState("");
+  const term = query.trim().toLowerCase();
+  const matches = (field) =>
+    !term || field.label.toLowerCase().includes(term) || field.description.toLowerCase().includes(term);
 
-      {FIELD_GROUPS.map((group) => (
-        <BlockStack key={group.key} gap="100">
-          <Text as="h3" variant="headingXs" tone="subdued">
-            {group.title.toUpperCase()}
-          </Text>
-          <BlockStack gap="100">
-            {FIELD_TYPES.filter((field) => field.group === group.key).map((field) => (
-              <PaletteItem key={field.type} field={field} onAddField={onAddField} />
+  const groups = FIELD_GROUPS.map((group) => ({
+    ...group,
+    fields: FIELD_TYPES.filter((field) => field.group === group.key && matches(field)),
+  })).filter((group) => group.fields.length > 0);
+
+  return (
+    <aside className="fb-sidebar" aria-label="Form elements">
+      <h2 className="fb-sidebar__title">Form elements</h2>
+      <div className="fb-search">
+        <SearchIcon width={18} height={18} fill="#616161" aria-hidden="true" />
+        <input
+          type="search"
+          placeholder="Search components…"
+          aria-label="Search components"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </div>
+
+      {groups.length === 0 && <p className="fb-sidebar__empty">No elements match “{query}”.</p>}
+
+      {groups.map((group) => (
+        <section key={group.key} className="fb-group">
+          <h3 className="fb-group__title">{group.title}</h3>
+          <div className="fb-group__list">
+            {group.fields.map((field) => (
+              <PaletteItem
+                key={field.type}
+                field={field}
+                disabledReason={disabledTypes[field.type]}
+                onAddField={onAddField}
+              />
             ))}
-          </BlockStack>
-        </BlockStack>
+          </div>
+        </section>
       ))}
-    </div>
+    </aside>
   );
 }
 
-function PaletteItem({ field, onAddField }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+function PaletteItem({ field, disabledReason, onAddField }) {
+  const disabled = Boolean(disabledReason);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${field.type}`,
     data: { source: "palette", fieldType: field.type },
+    disabled,
   });
 
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0.4 : 1,
-        cursor: "grab",
-        touchAction: "none",
-      }}
+      className={`fb-element${isDragging ? " fb-element--dragging" : ""}${disabled ? " fb-element--disabled" : ""}`}
+      title={disabledReason || field.description}
+      // Pointer drags start anywhere on the row; keyboard drags use the handle.
+      onPointerDown={disabled ? undefined : listeners?.onPointerDown}
     >
-      <div
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "6px 8px",
-          border: "1px solid #e1e3e5",
-          borderRadius: 8,
-          background: "#ffffff",
-        }}
+      <button
+        type="button"
+        className="fb-element__add"
+        onClick={() => onAddField(field.type)}
+        disabled={disabled}
+        aria-label={disabled ? `${field.label}: ${disabledReason}` : `Add ${field.label}`}
       >
-        <button
-          type="button"
-          aria-label={`Drag ${field.label} field`}
-          {...listeners}
-          {...attributes}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 24,
-            height: 24,
-            border: 0,
-            borderRadius: 5,
-            background: "transparent",
-            color: "#8a8a8a",
-            cursor: "grab",
-            touchAction: "none",
-            padding: 0,
-          }}
-        >
-          <DragHandleIcon width={16} height={16} fill="currentColor" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onAddField(field.type)}
-          aria-label={`Add ${field.label} field`}
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            border: 0,
-            background: "transparent",
-            cursor: "pointer",
-            textAlign: "left",
-            font: "inherit",
-            padding: 0,
-          }}
-        >
-          <InlineStack gap="200" blockAlign="center" wrap={false}>
-            <FieldIcon name={field.icon} color="subdued" size={18} />
-            <Text as="span" variant="bodySm" fontWeight="medium" truncate>
-              {field.label}
-            </Text>
-          </InlineStack>
-        </button>
-      </div>
+        <FieldIcon name={field.icon} size={20} />
+        <span className="fb-element__label">{field.label}</span>
+      </button>
+      <button
+        type="button"
+        className="fb-element__handle"
+        aria-label={`Drag ${field.label} onto the form`}
+        disabled={disabled}
+        {...attributes}
+        {...listeners}
+      >
+        <DragHandleIcon width={18} height={18} fill="currentColor" />
+      </button>
     </div>
   );
 }

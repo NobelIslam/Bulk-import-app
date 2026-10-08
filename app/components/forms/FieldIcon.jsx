@@ -1,14 +1,18 @@
 import {
-  ButtonIcon,
+  ButtonPressIcon,
   CalendarIcon,
   CheckboxIcon,
   EmailIcon,
   EyeCheckMarkIcon,
   HashtagIcon,
-  MobileIcon,
+  ListBulletedIcon,
+  MinusIcon,
+  PhoneIcon,
   SelectIcon,
   ShieldCheckMarkIcon,
+  StatusActiveIcon,
   TextBlockIcon,
+  TextFontIcon,
   TextIcon,
   TextTitleIcon,
   UploadIcon,
@@ -16,22 +20,23 @@ import {
 
 // Maps the `icon` key on a field type in ./fields.js to a Polaris icon.
 const ICONS = {
-  text: TextIcon,
+  text: TextFontIcon,
   textLong: TextBlockIcon,
   email: EmailIcon,
-  mobile: MobileIcon,
+  phone: PhoneIcon,
   hash: HashtagIcon,
   calendar: CalendarIcon,
   upload: UploadIcon,
   eye: EyeCheckMarkIcon,
   list: SelectIcon,
-  select: SelectIcon,
+  radio: StatusActiveIcon,
   checkbox: CheckboxIcon,
-  checkboxGroup: CheckboxIcon,
+  checkboxGroup: ListBulletedIcon,
   shield: ShieldCheckMarkIcon,
   heading: TextTitleIcon,
   paragraph: TextBlockIcon,
-  button: ButtonIcon,
+  divider: MinusIcon,
+  button: ButtonPressIcon,
 };
 
 const COLORS = {
@@ -39,6 +44,8 @@ const COLORS = {
   base: "#303030",
 };
 
+// polaris-icons components spread props onto <svg> and ignore `size`/`color`,
+// so the size and fill have to be set as real SVG attributes.
 export default function FieldIcon({ name, color = "base", size = 20 }) {
   const Icon = ICONS[name] || TextIcon;
   return (

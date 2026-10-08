@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher, useLoaderData, useRouteError } from "react-router";
+import { Link, useFetcher, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
@@ -19,44 +19,38 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Banner, Button, Modal } from "@shopify/polaris";
 import {
-  Badge,
-  Banner,
-  BlockStack,
-  Box,
-  Button,
-  ButtonGroup,
-  Checkbox,
-  Divider,
-  InlineStack,
-  Page,
-  Tabs,
-  Text,
-  TextField,
-  Tooltip,
-} from "@shopify/polaris";
-import {
+  ChevronRightIcon,
+  ClipboardIcon,
+  DeleteIcon,
   DesktopIcon,
+  DragDropIcon,
   DragHandleIcon,
   DuplicateIcon,
+  EditIcon,
+  ExternalIcon,
+  HideIcon,
   MobileIcon,
   RedoIcon,
-  SaveIcon,
+  SettingsIcon,
   UndoIcon,
+  ViewIcon,
 } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import { getForm, getFormSubmissionCounts, setFormStatus, updateForm } from "../forms/forms.server";
-import { getFieldType } from "../forms/fields";
-import { buildFormCss, DEFAULT_DESKTOP_STYLE } from "../forms/design";
+import { defaultField, getFieldType, normalizeSchema, WIDTH_OPTIONS } from "../forms/fields";
+import { buildFormCss, DEFAULT_DESKTOP_STYLE, resolveStyle } from "../forms/design";
 import useBuilderHistory, {
-  addField,
   duplicateField,
+  insertField,
   moveField,
+  moveFieldToIndex,
   removeField,
   setSchemaSettings,
+  setStyle,
   updateField,
   updateFieldSettings,
-  setStyle,
 } from "../forms/builder-state";
 import FieldPalette from "../components/forms/FieldPalette";
 import FormPreview, { FormFieldPreview } from "../components/forms/FormPreview";
@@ -65,18 +59,17 @@ import FormSettings from "../components/forms/FormSettings";
 import DesignSettings from "../components/forms/DesignSettings";
 import FieldIcon from "../components/forms/FieldIcon";
 import "@shopify/polaris/build/esm/styles.css";
+import "../components/forms/builder.css";
 
-const CANVAS_DROP_ID = "tclf-canvas";
-const CANVAS_TABS = [
-  { id: "build", content: "Build" },
-  { id: "preview", content: "Preview" },
-];
-const SETTINGS_TABS = [
-  { id: "field", content: "Field" },
-  { id: "form", content: "Form" },
-  { id: "design", content: "Design" },
-];
+const DROP_ZONE_ID = "tclf-dropzone";
 const AUTOSAVE_DELAY = 1500;
+const TABS = [
+  { id: "build", label: "Build" },
+  { id: "design", label: "Design" },
+  { id: "settings", label: "Settings" },
+  { id: "publish", label: "Publish" },
+];
+const WIDTH_LABEL = Object.fromEntries(WIDTH_OPTIONS.map((option) => [option.value, option.label]));
 
 export const loader = async ({ request, params }) => {
   const { session } = await authenticate.admin(request);
@@ -85,7 +78,12 @@ export const loader = async ({ request, params }) => {
     throw new Response("Form not found", { status: 404 });
   }
   const counts = await getFormSubmissionCounts(session.shop);
-  return { form: { ...form, submissionCount: counts[form.id] || 0 } };
+  return {
+    form: { ...form, submissionCount: counts[form.id] || 0 },
+    shop: session.shop,
+    // eslint-disable-next-line no-undef
+    apiKey: process.env.SHOPIFY_API_KEY || "",
+  };
 };
 
 export const action = async ({ request, params }) => {
@@ -128,52 +126,59 @@ export const action = async ({ request, params }) => {
   return { ok: false, message: "Unknown action." };
 };
 
+// Stored forms may predate newer field options; normalizing gives every field
+// its defaults so the builder never has to guess.
 function docFromForm(form) {
   return {
     name: form.name,
-    schema: form.schema,
-    desktopStyle: form.desktopStyle || DEFAULT_DESKTOP_STYLE,
+    schema: normalizeSchema(form.schema),
+    desktopStyle: { ...DEFAULT_DESKTOP_STYLE, ...(form.desktopStyle || {}) },
     mobileStyle: form.mobileStyle || {},
   };
 }
 
+function isEditableTarget(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
 export default function FormBuilder() {
-  const { form } = useLoaderData();
+  const { form, shop, apiKey } = useLoaderData();
   const fetcher = useFetcher();
   const shopify = useAppBridge();
 
   const initialRef = useRef(null);
   if (!initialRef.current) initialRef.current = docFromForm(form);
 
-  const { doc, update, undo, redo, select, load, canUndo, canRedo, dirty, selectedFieldId } =
+  const { doc, update, undo, redo, select, markSaved, canUndo, canRedo, dirty, selectedFieldId } =
     useBuilderHistory(initialRef.current);
 
-  const [panelTab, setPanelTab] = useState("form");
-  const [canvasTab, setCanvasTab] = useState("build");
+  const [tab, setTab] = useState("build");
   const [viewport, setViewport] = useState("desktop");
-  const activeStyle = viewport === "mobile" ? doc.mobileStyle : doc.desktopStyle;
-  const [popupPreview, setPopupPreview] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [activeDrag, setActiveDrag] = useState(null);
   const [saveState, setSaveState] = useState("idle");
   const [savedAt, setSavedAt] = useState(null);
   const [bannerError, setBannerError] = useState(null);
+  const [pendingIntent, setPendingIntent] = useState(null);
 
-  const lastSavedRef = useRef(null);
+  const sentDocRef = useRef(null);
   const prevFetcherState = useRef(fetcher.state);
-  const uid = "canvas";
 
   const fields = useMemo(() => doc.schema?.fields || [], [doc.schema]);
   const selectedField = fields.find((field) => field.id === selectedFieldId) || null;
-  const activePanelTab = panelTab === "field" && !selectedField ? "form" : panelTab;
   const published = form.status === "PUBLISHED";
+  const hasSubmit = fields.some((field) => field.type === "submitButton");
 
   // ─── Saving ────────────────────────────────────────────────────────────────
 
   const submitDoc = useCallback(
     (intent, nextDoc) => {
+      sentDocRef.current = intent === "unpublish" ? null : nextDoc;
       const serialized = JSON.stringify(nextDoc);
-      if (intent === "save") lastSavedRef.current = serialized;
       setSaveState("saving");
+      setPendingIntent(intent);
       fetcher.submit({ intent, doc: serialized }, { method: "post" });
     },
     [fetcher],
@@ -192,6 +197,7 @@ export default function FormBuilder() {
     if (!wasBusy || fetcher.state !== "idle" || !fetcher.data) return;
 
     const result = fetcher.data;
+    setPendingIntent(null);
     if (!result.ok) {
       setSaveState("error");
       setBannerError(result.message);
@@ -199,40 +205,82 @@ export default function FormBuilder() {
       return;
     }
     setBannerError(null);
-    if (result.intent === "save") {
-      setSaveState(dirty ? "saving" : "saved");
-      setSavedAt(new Date());
-    } else {
-      setSaveState("saved");
-      setSavedAt(new Date());
-      shopify.toast.show(result.message);
-    }
-    // `dirty` is intentionally not a dependency: it changes on every keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetcher.state, fetcher.data, shopify]);
+    if (sentDocRef.current) markSaved(sentDocRef.current);
+    setSaveState("saved");
+    setSavedAt(new Date());
+    if (result.intent !== "save") shopify.toast.show(result.message);
+  }, [fetcher.state, fetcher.data, shopify, markSaved]);
 
-  // A publish/unpublish revalidates the loader. Once the server's copy matches
-  // what we sent, adopt it as the new undo baseline.
-  const loaderStamp = `${form.id}:${form.status}:${new Date(form.updatedAt).getTime()}`;
+  // Warn before leaving with edits the autosave hasn't sent yet.
   useEffect(() => {
-    const incoming = docFromForm(form);
-    if (lastSavedRef.current && JSON.stringify(incoming) === lastSavedRef.current) {
-      lastSavedRef.current = null;
-      load(incoming);
+    if (!dirty) return undefined;
+    const handler = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  // ─── Field operations ──────────────────────────────────────────────────────
+
+  const addFieldOfType = (type, index = null) => {
+    if (type === "submitButton" && hasSubmit) return;
+    const takenKeys = fields.map((field) => field.key).filter(Boolean);
+    const field = defaultField(type, takenKeys);
+    if (!field) return;
+    update((current) => insertField(current, field, index));
+    select(field.id);
+    setTab("build");
+  };
+
+  const removeSelected = (fieldId) => {
+    update((current) => removeField(current, fieldId));
+    if (fieldId === selectedFieldId) select(null);
+  };
+
+  const toggleVisible = (field) => update((current) => updateField(current, field.id, { visible: field.visible === false }));
+
+  // ─── Keyboard shortcuts ────────────────────────────────────────────────────
+
+  const shortcutsRef = useRef(null);
+  shortcutsRef.current = (event) => {
+    const mod = event.metaKey || event.ctrlKey;
+    if (mod && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      submitDoc("save", doc);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaderStamp]);
+    if (isEditableTarget(event.target)) return;
+    if (mod && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+    } else if (mod && event.key.toLowerCase() === "y") {
+      event.preventDefault();
+      redo();
+    } else if ((event.key === "Delete" || event.key === "Backspace") && selectedField && selectedField.type !== "submitButton") {
+      event.preventDefault();
+      removeSelected(selectedField.id);
+    } else if (event.key === "Escape" && selectedField) {
+      select(null);
+    }
+  };
+  useEffect(() => {
+    const handler = (event) => shortcutsRef.current?.(event);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // ─── Drag and drop ─────────────────────────────────────────────────────────
 
   const sensors = useSensors(
-    // A small activation distance keeps click-to-select working.
+    // A small activation distance keeps click-to-add and click-to-select working.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const handleDragStart = (event) => {
-    const { active } = event;
+  const handleDragStart = ({ active }) => {
     setActiveDrag({
       id: active.id,
       source: active.data.current?.source,
@@ -240,523 +288,650 @@ export default function FormBuilder() {
     });
   };
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
+  const handleDragEnd = ({ active, over }) => {
     setActiveDrag(null);
     if (!over) return;
 
     if (active.data.current?.source === "palette") {
-      const type = active.data.current.fieldType;
-      const index =
-        over.id === CANVAS_DROP_ID ? doc.schema.fields.length : doc.schema.fields.findIndex((f) => f.id === over.id);
-      update((current) => addField(current, type, index));
+      const index = over.id === DROP_ZONE_ID ? 0 : fields.findIndex((field) => field.id === over.id);
+      addFieldOfType(active.data.current.fieldType, index === -1 ? null : index);
       return;
     }
 
-    if (active.id !== over.id && over.id !== CANVAS_DROP_ID) {
+    if (over.id === DROP_ZONE_ID) {
+      update((current) => moveFieldToIndex(current, String(active.id), 0));
+    } else if (active.id !== over.id) {
       update((current) => moveField(current, String(active.id), String(over.id)));
     }
   };
 
-  // ─── Handlers ──────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
 
-  const handlePaletteAdd = (type) => update((current) => addField(current, type, null));
+  const resolvedStyle = resolveStyle(doc.desktopStyle, doc.mobileStyle, viewport);
+  const mobileOverrideCount = Object.keys(doc.mobileStyle || {}).filter(
+    (key) => doc.mobileStyle[key] !== undefined && doc.mobileStyle[key] !== "",
+  ).length;
 
-  const handleSelectField = (fieldId) => {
-    select(fieldId);
-    setPanelTab("field");
-  };
-
-  const canvasCss = buildFormCss({ publicId: form.publicId, desktop: doc.desktopStyle, mobile: doc.mobileStyle });
+  const preview = (
+    <FormPreview
+      publicId={`${form.publicId}-preview`}
+      schema={doc.schema}
+      desktopStyle={doc.desktopStyle}
+      mobileStyle={doc.mobileStyle}
+      viewport={viewport}
+      interactive
+      onSubmitPreview={() => shopify.toast.show("Preview only — nothing was submitted.")}
+    />
+  );
 
   return (
-    <Page
-      title={form.name}
-      titleMetadata={
-        <InlineStack gap="200" blockAlign="center">
-          <Badge tone={published ? "success" : undefined}>{published ? "Published" : "Draft"}</Badge>
-          <Text as="span" variant="bodySm" tone="subdued">
-            {form.submissionCount.toLocaleString()} submissions
-          </Text>
-        </InlineStack>
-      }
-      backAction={{ content: "Forms", url: "/app/forms" }}
-      primaryAction={{
-        content: published ? "Unpublish" : "Publish",
-        onAction: () => submitDoc(published ? "unpublish" : "publish", doc),
-        loading: saveState === "saving",
-      }}
-      secondaryActions={[
-        {
-          content: "Save",
-          icon: SaveIcon,
-          onAction: () => submitDoc("save", doc),
-          disabled: !dirty,
-        },
-        {
-          content: "Undo",
-          icon: UndoIcon,
-          onAction: undo,
-          disabled: !canUndo,
-        },
-        {
-          content: "Redo",
-          icon: RedoIcon,
-          onAction: redo,
-          disabled: !canRedo,
-        },
-      ]}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveDrag(null)}
     >
-      <BlockStack gap="300">
-        {bannerError && (
-          <Banner tone="critical" title="Couldn't save your changes" onDismiss={() => setBannerError(null)}>
-            <p>{bannerError}</p>
-          </Banner>
-        )}
+      <div className="fb-root">
+        <FieldPalette
+          onAddField={(type) => addFieldOfType(type)}
+          disabledTypes={hasSubmit ? { submitButton: "Your form already has a submit button." } : {}}
+        />
 
-        <InlineStack gap="200" blockAlign="center">
-          <TextField
-            label="Form name"
-            labelHidden
-            value={doc.name}
-            autoComplete="off"
-            onChange={(name) => update((current) => ({ ...current, name }), "form-name")}
-          />
-          <SaveIndicator state={saveState} savedAt={savedAt} />
-        </InlineStack>
-      </BlockStack>
+        <main className="fb-main">
+          <nav className="fb-breadcrumb" aria-label="Breadcrumb">
+            <Link to="/app/forms">Forms</Link>
+            <ChevronRightIcon width={16} height={16} fill="currentColor" aria-hidden="true" />
+            <span className="fb-breadcrumb__current">{doc.name}</span>
+          </nav>
 
-      <Divider />
+          <header className="fb-header">
+            <div className="fb-header__title">
+              <EditableTitle
+                value={doc.name}
+                onChange={(name) => update((current) => ({ ...current, name }), "form-name")}
+              />
+              <span className={`fb-badge${published ? " fb-badge--success" : ""}`}>
+                {published ? "Published" : "Draft"}
+              </span>
+            </div>
+            <div className="fb-header__actions">
+              <SaveIndicator state={saveState} savedAt={savedAt} dirty={dirty} />
+              <button type="button" className="fb-icon-btn" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" onClick={undo} disabled={!canUndo}>
+                <UndoIcon width={20} height={20} fill="currentColor" />
+              </button>
+              <button type="button" className="fb-icon-btn" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!canRedo}>
+                <RedoIcon width={20} height={20} fill="currentColor" />
+              </button>
+              <button type="button" className="fb-btn" onClick={() => setPreviewOpen(true)}>
+                <ViewIcon width={20} height={20} fill="currentColor" aria-hidden="true" />
+                Preview
+              </button>
+              <button
+                type="button"
+                className="fb-btn"
+                onClick={() => submitDoc("save", doc)}
+                disabled={!dirty || pendingIntent !== null}
+              >
+                {pendingIntent === "save" && dirty ? "Saving…" : "Save"}
+              </button>
+              {published ? (
+                <button
+                  type="button"
+                  className="fb-btn"
+                  onClick={() => submitDoc("unpublish", doc)}
+                  disabled={pendingIntent !== null}
+                >
+                  {pendingIntent === "unpublish" ? "Unpublishing…" : "Unpublish"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="fb-btn fb-btn--primary"
+                  onClick={() => submitDoc("publish", doc)}
+                  disabled={pendingIntent !== null}
+                >
+                  {pendingIntent === "publish" ? "Publishing…" : "Publish"}
+                </button>
+              )}
+            </div>
+          </header>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={() => setActiveDrag(null)}
-      >
-        <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0, 1fr) 340px", gap: 12, alignItems: "stretch" }}>
-          <Panel>
-            <FieldPalette onAddField={handlePaletteAdd} />
-          </Panel>
+          {bannerError && (
+            <div style={{ marginBottom: 16 }}>
+              <Banner tone="critical" title="Couldn't save your changes" onDismiss={() => setBannerError(null)}>
+                <p>{bannerError}</p>
+              </Banner>
+            </div>
+          )}
 
-          <Panel>
-            <Tabs
-              tabs={CANVAS_TABS}
-              selected={Math.max(CANVAS_TABS.findIndex((tab) => tab.id === canvasTab), 0)}
-              onSelect={(index) => setCanvasTab(CANVAS_TABS[index].id)}
-              fitted
-            />
-            {canvasTab === "build" && (
-                <Canvas
-                  formId={form.publicId}
-                  css={canvasCss}
-                  fields={fields}
-                  uid={uid}
-                  settings={doc.schema.settings}
-                  desktopStyle={doc.desktopStyle}
-                  selectedFieldId={selectedFieldId}
-                  onSelectField={handleSelectField}
-                  onDuplicate={(fieldId) => update((current) => duplicateField(current, fieldId))}
-                  onRemove={(fieldId) => {
-                    update((current) => removeField(current, fieldId));
-                    if (fieldId === selectedFieldId) select(null);
-                  }}
-                />
+          <div className="fb-tabs" role="tablist" aria-label="Form builder sections">
+            {TABS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                id={`fb-tab-${entry.id}`}
+                aria-selected={tab === entry.id}
+                aria-controls={`fb-tabpanel-${entry.id}`}
+                className="fb-tab"
+                onClick={() => setTab(entry.id)}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+
+          <div role="tabpanel" id={`fb-tabpanel-${tab}`} aria-labelledby={`fb-tab-${tab}`}>
+            {tab === "build" && (
+              <Canvas
+                publicId={form.publicId}
+                doc={doc}
+                fields={fields}
+                selectedFieldId={selectedFieldId}
+                onSelect={(fieldId) => select(fieldId)}
+                onDuplicate={(fieldId) => update((current) => duplicateField(current, fieldId))}
+                onRemove={removeSelected}
+                onToggleVisible={toggleVisible}
+              />
             )}
 
-            {canvasTab === "preview" && (
-              <Box padding="400">
-                <BlockStack gap="300">
-                  <InlineStack gap="200" blockAlign="center">
-                    <ButtonGroup variant="segmented">
-                      <Button
-                        icon={DesktopIcon}
-                        pressed={viewport === "desktop"}
-                        onClick={() => setViewport("desktop")}
-                        accessibilityLabel="Desktop preview"
-                      >
-                        Desktop
-                      </Button>
-                      <Button
-                        icon={MobileIcon}
-                        pressed={viewport === "mobile"}
-                        onClick={() => setViewport("mobile")}
-                        accessibilityLabel="Mobile preview"
-                      >
-                        Mobile
-                      </Button>
-                    </ButtonGroup>
-                    <Checkbox
-                      label="Show as popup"
-                      checked={popupPreview}
-                      onChange={setPopupPreview}
-                    />
-                  </InlineStack>
-
-                  <div
-                    style={{
-                      background: "#f1f2f3",
-                      padding: 12,
-                      borderRadius: 8,
-                      display: "flex",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: viewport === "mobile" ? 390 : "100%",
-                        maxWidth: "100%",
-                        transition: "width 0.2s ease",
-                      }}
-                    >
-                      <FormPreview
-                        publicId={`${form.publicId}-preview`}
-                        schema={doc.schema}
-                        desktopStyle={doc.desktopStyle}
-                        mobileStyle={doc.mobileStyle}
-                        viewport={viewport}
-                        mode={popupPreview ? "popup" : "inline"}
-                      />
-                    </div>
+            {tab === "design" && (
+              <div className="fb-card">
+                <PreviewToolbar viewport={viewport} onViewport={setViewport} title="Live preview" />
+                <div className="fb-preview-stage">
+                  <div className={`fb-preview-frame${viewport === "mobile" ? " fb-preview-frame--mobile" : ""}`}>
+                    {preview}
                   </div>
-                </BlockStack>
-              </Box>
+                </div>
+              </div>
             )}
-          </Panel>
 
-          <Panel>
-            <Tabs
-              tabs={SETTINGS_TABS.map((tab) => (tab.id === "field" ? { ...tab, disabled: !selectedField } : tab))}
-              selected={Math.max(SETTINGS_TABS.findIndex((tab) => tab.id === activePanelTab), 0)}
-              onSelect={(index) => setPanelTab(SETTINGS_TABS[index].id)}
-              fitted
-            />
-            {activePanelTab === "field" && (
-                <FieldSettings
-                  field={selectedField}
-                  otherFields={fields.filter((field) => field.id !== selectedFieldId)}
-                  onUpdate={(patch) => update((current) => updateField(current, selectedFieldId, patch), `field-${selectedFieldId}`)}
-                  onUpdateSection={(section, patch) =>
-                    update((current) => updateFieldSettings(current, selectedFieldId, section, patch))
-                  }
-                  onRemove={() => {
-                    update((current) => removeField(current, selectedFieldId));
-                    select(null);
-                  }}
-                  onDuplicate={() => update((current) => duplicateField(current, selectedFieldId))}
-                />
-            )}
-            {activePanelTab === "form" && (
+            {tab === "settings" && (
+              <div className="fb-card fb-card--flush">
                 <FormSettings
                   settings={doc.schema.settings}
                   updateSetting={(patch) => update((current) => setSchemaSettings(current, patch), "form-settings")}
                 />
+              </div>
             )}
-            {activePanelTab === "design" && (
+
+            {tab === "publish" && (
+              <PublishPanel
+                form={form}
+                shop={shop}
+                apiKey={apiKey}
+                published={published}
+                busy={pendingIntent !== null}
+                onPublish={() => submitDoc("publish", doc)}
+                onUnpublish={() => submitDoc("unpublish", doc)}
+                onCopied={() => shopify.toast.show("Form ID copied")}
+              />
+            )}
+          </div>
+        </main>
+
+        <aside className="fb-panel" aria-label="Settings panel">
+          {tab === "build" &&
+            (selectedField ? (
+              <FieldSettings
+                key={selectedField.id}
+                field={selectedField}
+                otherFields={fields.filter((field) => field.id !== selectedFieldId)}
+                onUpdate={(patch) =>
+                  update((current) => updateField(current, selectedFieldId, patch), `field-${selectedFieldId}`)
+                }
+                onUpdateSection={(section, patch) =>
+                  update(
+                    (current) => updateFieldSettings(current, selectedFieldId, section, patch),
+                    `field-${selectedFieldId}-${section}`,
+                  )
+                }
+                onRemove={() => removeSelected(selectedFieldId)}
+                onDuplicate={() => update((current) => duplicateField(current, selectedFieldId))}
+                onClose={() => select(null)}
+              />
+            ) : (
               <>
-                <Box paddingBlockStart="400" paddingInline="400">
-                  <ButtonGroup variant="segmented">
-                    <Button pressed={viewport === "desktop"} onClick={() => setViewport("desktop")}>Desktop</Button>
-                    <Button pressed={viewport === "mobile"} onClick={() => setViewport("mobile")}>Mobile</Button>
-                  </ButtonGroup>
-                </Box>
-                <DesignSettings
-                  style={activeStyle}
-                  onChange={(patch) => update((current) => setStyle(current, viewport, patch), `style-${viewport}`)}
-                />
+                <div className="fb-panel__header">
+                  <h2 className="fb-panel__title">Field settings</h2>
+                </div>
+                <div className="fb-panel__empty">
+                  <SettingsIcon width={28} height={28} fill="#8a8a8a" aria-hidden="true" />
+                  <strong style={{ color: "#303030" }}>No field selected</strong>
+                  <span>Click a field on the canvas to edit its label, validation, layout and more.</span>
+                </div>
               </>
-            )}
-          </Panel>
-        </div>
+            ))}
 
-        <DragOverlay>
-          {activeDrag ? <DragOverlayCard drag={activeDrag} /> : null}
-        </DragOverlay>
-      </DndContext>
-    </Page>
+          {tab === "design" && (
+            <>
+              <div className="fb-panel__header">
+                <h2 className="fb-panel__title">Design</h2>
+              </div>
+              <div className="fb-seg fb-seg--compact" role="group" aria-label="Viewport" style={{ marginBottom: 8 }}>
+                <button type="button" aria-pressed={viewport === "desktop"} onClick={() => setViewport("desktop")}>
+                  <DesktopIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Desktop
+                </button>
+                <button type="button" aria-pressed={viewport === "mobile"} onClick={() => setViewport("mobile")}>
+                  <MobileIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Mobile
+                </button>
+              </div>
+              <p className="fb-help" style={{ marginBottom: 12 }}>
+                {viewport === "mobile"
+                  ? "Changes here apply to phones only. Anything you don't change uses the desktop value."
+                  : "These styles apply everywhere unless you override them for mobile."}
+              </p>
+              {viewport === "mobile" && mobileOverrideCount > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <Button
+                    variant="plain"
+                    onClick={() => update((current) => ({ ...current, mobileStyle: {} }))}
+                  >
+                    {`Reset ${mobileOverrideCount} mobile override${mobileOverrideCount === 1 ? "" : "s"}`}
+                  </Button>
+                </div>
+              )}
+              <DesignSettings
+                style={resolvedStyle}
+                onChange={(patch) => update((current) => setStyle(current, viewport, patch), `style-${viewport}`)}
+              />
+            </>
+          )}
+
+          {(tab === "settings" || tab === "publish") && (
+            <>
+              <div className="fb-panel__header">
+                <h2 className="fb-panel__title">Live preview</h2>
+              </div>
+              <div className="fb-preview-stage" style={{ padding: 12 }}>
+                <div className="fb-preview-frame">
+                  <FormPreview
+                    publicId={`${form.publicId}-side`}
+                    schema={doc.schema}
+                    desktopStyle={doc.desktopStyle}
+                    mobileStyle={doc.mobileStyle}
+                    viewport="mobile"
+                    interactive
+                    onSubmitPreview={() => shopify.toast.show("Preview only — nothing was submitted.")}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </aside>
+      </div>
+
+      <DragOverlay>{activeDrag ? <DragOverlayCard drag={activeDrag} fields={fields} /> : null}</DragOverlay>
+
+      <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={`Preview: ${doc.name}`} size="large">
+        <Modal.Section>
+          <PreviewToolbar
+            viewport={viewport}
+            onViewport={setViewport}
+            title="Fill it in to try conditional fields. Nothing is submitted."
+          />
+          <div className="fb-preview-stage">
+            <div className={`fb-preview-frame${viewport === "mobile" ? " fb-preview-frame--mobile" : ""}`}>{preview}</div>
+          </div>
+        </Modal.Section>
+      </Modal>
+    </DndContext>
   );
 }
 
-// ─── Panels ──────────────────────────────────────────────────────────────────
+// ─── Header pieces ───────────────────────────────────────────────────────────
 
-function Panel({ children }) {
+function EditableTitle({ value, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const commit = () => {
+    const next = draft.trim();
+    if (next && next !== value) onChange(next.slice(0, 120));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className="fb-title-input"
+        value={draft}
+        maxLength={120}
+        aria-label="Form name"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commit();
+          if (event.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
   return (
-    <div
-      style={{
-        border: "1px solid #e1e3e5",
-        borderRadius: 12,
-        background: "#ffffff",
-        maxHeight: "calc(100vh - 320px)",
-        overflow: "auto",
-      }}
-    >
-      {children}
-    </div>
+    <>
+      <h1 className="fb-title" title={value}>
+        {value}
+      </h1>
+      <button
+        type="button"
+        className="fb-icon-btn"
+        aria-label="Rename form"
+        title="Rename form"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+      >
+        <EditIcon width={20} height={20} fill="currentColor" />
+      </button>
+    </>
   );
 }
 
-function SaveIndicator({ state, savedAt }) {
-  if (state === "saving") {
-    return (
-      <Text as="span" variant="bodySm" tone="subdued">
-        Saving…
-      </Text>
-    );
-  }
-  if (state === "error") {
-    return (
-      <Text as="span" variant="bodySm" tone="critical">
-        Not saved
-      </Text>
-    );
-  }
+function SaveIndicator({ state, savedAt, dirty }) {
+  if (state === "saving") return <span className="fb-save-state">Saving…</span>;
+  if (state === "error") return <span className="fb-save-state fb-save-state--error">Not saved</span>;
+  if (dirty) return <span className="fb-save-state">Unsaved changes</span>;
   if (savedAt) {
     return (
-      <Text as="span" variant="bodySm" tone="subdued">
+      <span className="fb-save-state">
         Saved {savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-      </Text>
+      </span>
     );
   }
+  return <span className="fb-save-state">All changes saved</span>;
+}
+
+function PreviewToolbar({ viewport, onViewport, title }) {
   return (
-    <Text as="span" variant="bodySm" tone="subdued">
-      All changes saved
-    </Text>
+    <div className="fb-preview-toolbar">
+      <span className="fb-help" style={{ margin: 0 }}>
+        {title}
+      </span>
+      <div className="fb-seg fb-seg--compact" role="group" aria-label="Preview size">
+        <button type="button" aria-pressed={viewport === "desktop"} onClick={() => onViewport("desktop")}>
+          <DesktopIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Desktop
+        </button>
+        <button type="button" aria-pressed={viewport === "mobile"} onClick={() => onViewport("mobile")}>
+          <MobileIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Mobile
+        </button>
+      </div>
+    </div>
   );
 }
 
 // ─── Canvas ──────────────────────────────────────────────────────────────────
 
-function Canvas({
-  formId,
-  css,
-  fields,
-  uid,
-  settings,
-  desktopStyle,
-  selectedFieldId,
-  onSelectField,
-  onDuplicate,
-  onRemove,
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: CANVAS_DROP_ID });
-  const hasInputFields = fields.some((field) => field.type !== "submitButton");
+function Canvas({ publicId, doc, fields, selectedFieldId, onSelect, onDuplicate, onRemove, onToggleVisible }) {
+  const { setNodeRef, isOver } = useDroppable({ id: DROP_ZONE_ID });
+  const scope = `${publicId}-canvas`;
+  const css = buildFormCss({ publicId: scope, desktop: doc.desktopStyle, mobile: doc.mobileStyle });
+  const style = resolveStyle(doc.desktopStyle, doc.mobileStyle, "desktop");
 
   return (
-    <Box padding="400">
-      <div className={`tclf-card tclf-form--${formId}`} style={{ position: "relative" }}>
+    <div className="fb-card">
+      <div ref={setNodeRef} className={`fb-dropzone${isOver ? " fb-dropzone--over" : ""}`}>
+        <span className="fb-dropzone__title">
+          <DragDropIcon width={20} height={20} fill="currentColor" aria-hidden="true" />
+          Drag form elements here
+        </span>
+        <span className="fb-dropzone__hint">
+          Build your form by dragging elements from the left panel, or click one to add it.
+        </span>
+      </div>
+
+      <div
+        className={`tclf-form--${scope}`}
+        data-input-style={style.inputStyle}
+        style={{ maxWidth: "none", textAlign: "left" }}
+      >
         <style dangerouslySetInnerHTML={{ __html: css }} />
-        <div
-          ref={setNodeRef}
-          className="tclf-grid"
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "flex-start",
-            gap: 12,
-            minHeight: 120,
-            padding: isOver ? 8 : 0,
-            borderRadius: 8,
-            outline: isOver ? "2px dashed #2c6ecb" : "none",
-            outlineOffset: 4,
-            background: isOver ? "rgba(44, 110, 203, 0.04)" : "transparent",
-            transition: "background 0.12s ease, padding 0.12s ease",
-            textAlign: desktopStyle?.alignment || "left",
-          }}
-        >
-          {!hasInputFields && (
-            <div
-              style={{
-                flex: "1 1 100%",
-                border: "2px dashed #c9cccf",
-                borderRadius: 8,
-                padding: "28px 16px",
-                textAlign: "center",
-                color: "#6d7175",
-                background: "#fafbfb",
-              }}
-            >
-              <Text as="p" variant="bodySm" tone="subdued">
-                Drag a field here from the left, or click one to add it.
-              </Text>
-            </div>
-          )}
-          <SortableContext items={fields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={fields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
+          <div className="fb-list" style={{ flexDirection: "column", flexWrap: "nowrap" }}>
             {fields.map((field) => (
-              <CanvasField
+              <CanvasRow
                 key={field.id}
                 field={field}
-                uid={uid}
-                submitText={settings?.submitText}
-                buttonStyle={desktopStyle?.buttonStyle || "solid"}
+                fields={fields}
+                submitText={doc.schema.settings?.submitText}
+                buttonStyle={style.buttonStyle}
                 selected={selectedFieldId === field.id}
-                onSelect={() => onSelectField(field.id)}
+                onSelect={() => onSelect(field.id)}
                 onDuplicate={() => onDuplicate(field.id)}
                 onRemove={() => onRemove(field.id)}
+                onToggleVisible={() => onToggleVisible(field)}
               />
             ))}
-          </SortableContext>
-        </div>
+          </div>
+        </SortableContext>
       </div>
-    </Box>
+    </div>
   );
 }
 
-function CanvasField({ field, uid, submitText, buttonStyle, selected, onSelect, onDuplicate, onRemove }) {
+function CanvasRow({ field, fields, submitText, buttonStyle, selected, onSelect, onDuplicate, onRemove, onToggleVisible }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: field.id,
     data: { source: "canvas" },
   });
   const meta = getFieldType(field.type);
+  const isSubmit = field.type === "submitButton";
+  const visible = field.visible !== false;
+  const conditionSource = field.conditional?.fieldId
+    ? fields.find((entry) => entry.id === field.conditional.fieldId)
+    : null;
+  const name = field.label || meta?.label || "field";
 
-  const flex =
-    field.width === "half"
-      ? "1 1 calc(50% - 6px)"
-      : field.width === "third"
-        ? "1 1 calc(33.333% - 8px)"
-        : "1 1 100%";
+  const stop = (handler) => (event) => {
+    event.stopPropagation();
+    handler();
+  };
 
   return (
+    // Clicking the card is a mouse shortcut; the gear button is the keyboard path.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div
       ref={setNodeRef}
-      role="button"
-      tabIndex={0}
-      aria-pressed={selected}
+      className={`fb-row${selected ? " fb-row--selected" : ""}${isDragging ? " fb-row--dragging" : ""}${visible ? "" : " fb-row--off"}`}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
       onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-      style={{
-        flex,
-        minWidth: 0,
-        position: "relative",
-        padding: 8,
-        borderRadius: 8,
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.4 : 1,
-        border: selected ? "2px solid #2c6ecb" : "1px dashed transparent",
-        background: selected ? "#f1f7ff" : "transparent",
-        cursor: "pointer",
-      }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
-        <FormFieldPreview
-          field={field}
-          uid={uid}
-          submitText={submitText}
-          buttonStyle={buttonStyle}
-          bare
-        />
-      </div>
-
-      <div
-        style={{
-          position: "absolute",
-          top: -10,
-          right: 6,
-          display: "flex",
-          alignItems: "center",
-          gap: 2,
-          padding: "2px",
-          borderRadius: 6,
-          background: "#ffffff",
-          border: "1px solid #e1e3e5",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          opacity: selected || isDragging ? 1 : 0,
-        }}
+      <button
+        type="button"
+        className="fb-row__handle"
+        aria-label={`Reorder ${name}`}
+        title="Drag to reorder"
+        onClick={(event) => event.stopPropagation()}
+        {...attributes}
+        {...listeners}
       >
-        <Tooltip content={meta?.label || field.type}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 6px" }}>
-            <FieldIcon name={meta?.icon} color="subdued" size={14} />
-            <Text as="span" variant="bodySm" tone="subdued">
-              {meta?.label || field.type}
-            </Text>
-          </span>
-        </Tooltip>
-        <Tooltip content="Drag to reorder">
-          <button
-            type="button"
-            aria-label={`Reorder ${field.label}`}
-            style={chromeButtonStyle}
-            onClick={(event) => event.stopPropagation()}
-            {...attributes}
-            {...listeners}
-          >
-            <DragHandleIcon width={16} height={16} fill="currentColor" />
-          </button>
-        </Tooltip>
-        <Tooltip content="Duplicate">
-          <button
-            type="button"
-            aria-label={`Duplicate ${field.label}`}
-            style={chromeButtonStyle}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDuplicate();
-            }}
-          >
-            <DuplicateIcon width={16} height={16} fill="currentColor" />
-          </button>
-        </Tooltip>
-        <Tooltip content="Delete">
-          <button
-            type="button"
-            aria-label={`Delete ${field.label}`}
-            style={chromeButtonStyle}
-            onClick={(event) => {
-              event.stopPropagation();
-              onRemove();
-            }}
-            disabled={field.type === "submitButton"}
-          >
-            ✕
-          </button>
-        </Tooltip>
+        <DragHandleIcon width={18} height={18} fill="currentColor" />
+      </button>
+
+      <div className="fb-row__body">
+        {(!visible || conditionSource || field.width !== "full") && (
+          <div className="fb-row__meta">
+            {!visible && <span className="fb-badge fb-badge--muted">Hidden</span>}
+            {conditionSource && (
+              <span className="fb-badge fb-badge--muted">Shown when “{conditionSource.label}” is answered</span>
+            )}
+            {field.width !== "full" && <span className="fb-badge fb-badge--muted">{WIDTH_LABEL[field.width]} width</span>}
+          </div>
+        )}
+        {field.type === "hiddenField" ? (
+          <div>
+            <div className="tclf-label">{field.label}</div>
+            <div className="tclf-help">Hidden value: {field.defaultValue || "(empty)"}</div>
+          </div>
+        ) : (
+          <FormFieldPreview
+            field={field}
+            uid="canvas"
+            submitText={submitText}
+            buttonStyle={buttonStyle}
+            bare
+          />
+        )}
+      </div>
+
+      <div className="fb-row__actions">
+        <button
+          type="button"
+          className={`fb-icon-btn${selected ? " fb-icon-btn--active" : ""}`}
+          aria-label={`Edit settings for ${name}`}
+          title="Field settings"
+          onClick={stop(onSelect)}
+        >
+          <SettingsIcon width={20} height={20} fill="currentColor" />
+        </button>
+        <button
+          type="button"
+          className="fb-icon-btn"
+          aria-label={`Duplicate ${name}`}
+          title={isSubmit ? "A form has one submit button" : "Duplicate"}
+          onClick={stop(onDuplicate)}
+          disabled={isSubmit}
+        >
+          <DuplicateIcon width={20} height={20} fill="currentColor" />
+        </button>
+        <button
+          type="button"
+          className="fb-icon-btn"
+          aria-label={visible ? `Hide ${name} from the form` : `Show ${name} on the form`}
+          aria-pressed={!visible}
+          title={isSubmit ? "The submit button is always shown" : visible ? "Hide from form" : "Show on form"}
+          onClick={stop(onToggleVisible)}
+          disabled={isSubmit}
+        >
+          {visible ? (
+            <ViewIcon width={20} height={20} fill="currentColor" />
+          ) : (
+            <HideIcon width={20} height={20} fill="currentColor" />
+          )}
+        </button>
+        <button
+          type="button"
+          className="fb-icon-btn fb-icon-btn--critical"
+          aria-label={`Delete ${name}`}
+          title={isSubmit ? "Every form needs a submit button" : "Delete"}
+          onClick={stop(onRemove)}
+          disabled={isSubmit}
+        >
+          <DeleteIcon width={20} height={20} fill="currentColor" />
+        </button>
       </div>
     </div>
   );
 }
 
-function DragOverlayCard({ drag }) {
-  const meta = drag.fieldType ? getFieldType(drag.fieldType) : null;
+function DragOverlayCard({ drag, fields }) {
+  const field = drag.source === "canvas" ? fields.find((entry) => entry.id === drag.id) : null;
+  const meta = getFieldType(drag.fieldType || field?.type);
   return (
-    <div
-      style={{
-        padding: "8px 12px",
-        borderRadius: 8,
-        background: "#ffffff",
-        border: "1px solid #2c6ecb",
-        boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
-      <FieldIcon name={meta?.icon} color="subdued" size={16} />
-      <Text as="span" variant="bodySm" fontWeight="medium">
-        {meta?.label || "Move field"}
-      </Text>
+    <div className="fb-dragcard">
+      <FieldIcon name={meta?.icon} size={20} />
+      {field?.label || meta?.label || "Field"}
     </div>
   );
 }
 
-const chromeButtonStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 22,
-  height: 22,
-  border: "none",
-  borderRadius: 4,
-  background: "transparent",
-  cursor: "pointer",
-  color: "#6d7175",
-  touchAction: "none",
-};
+// ─── Publish ─────────────────────────────────────────────────────────────────
+
+function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpublish, onCopied }) {
+  const editorUrl =
+    shop && apiKey
+      ? `https://${shop}/admin/themes/current/editor?template=index&addAppBlockId=${apiKey}/form&target=newAppsSection`
+      : null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(form.publicId);
+      onCopied();
+    } catch {
+      window.prompt("Copy this form ID:", form.publicId);
+    }
+  };
+
+  return (
+    <>
+      <div className="fb-card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 650 }}>
+              {published ? "Your form is live" : "Your form is a draft"}
+            </h2>
+            <p className="fb-help">
+              {published
+                ? "Visitors can see and submit it wherever you've added it to your theme. Edits save straight to the live form."
+                : "Publish it so it can be shown on your storefront. Drafts are never visible to visitors."}
+            </p>
+          </div>
+          {published ? (
+            <button type="button" className="fb-btn" onClick={onUnpublish} disabled={busy}>
+              Unpublish
+            </button>
+          ) : (
+            <button type="button" className="fb-btn fb-btn--primary" onClick={onPublish} disabled={busy}>
+              Publish form
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="fb-card">
+        <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 650 }}>Add it to your store</h2>
+        <div className="fb-publish-step">
+          <span className="fb-publish-step__num">1</span>
+          <div>
+            <strong>Copy the form ID</strong>
+            <div className="fb-copy">
+              <code>{form.publicId}</code>
+              <Button icon={ClipboardIcon} onClick={copy}>
+                Copy
+              </Button>
+            </div>
+          </div>
+        </div>
+        <div className="fb-publish-step">
+          <span className="fb-publish-step__num">2</span>
+          <div>
+            <strong>Add the “TCL Form” block in the theme editor</strong>
+            <p className="fb-help">Open your theme, add the block to any page section, and paste the ID into its “Form public ID” setting.</p>
+            {editorUrl && (
+              <div style={{ marginTop: 8 }}>
+                <a className="fb-btn" href={editorUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
+                  <ExternalIcon width={18} height={18} fill="currentColor" aria-hidden="true" />
+                  Open theme editor
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="fb-publish-step">
+          <span className="fb-publish-step__num">3</span>
+          <div>
+            <strong>Save the theme and collect responses</strong>
+            <p className="fb-help">
+              Submissions appear on the <Link to={`/app/submissions?formId=${form.id}`}>Submissions</Link> page.
+              {` This form has ${form.submissionCount.toLocaleString()} so far.`}
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
 export function ErrorBoundary() {
   return boundary.error(useRouteError());

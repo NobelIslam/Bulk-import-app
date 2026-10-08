@@ -109,7 +109,7 @@ export function normalizeStyle(raw, base = DEFAULT_DESKTOP_STYLE) {
   return { ...base, ...out };
 }
 
-const NUMERIC_RANGES = {
+export const NUMERIC_RANGES = {
   labelFontSize: [10, 32],
   inputFontSize: [10, 32],
   headingFontSize: [12, 48],
@@ -140,7 +140,7 @@ function px(value, fallback) {
 
 // Emits the scoped stylesheet consumed by both the builder preview and the
 // storefront runtime. `publicId` scopes every selector.
-export function buildFormCss({ publicId, desktop, mobile }) {
+export function buildFormCss({ publicId, desktop, mobile, forceMobile = false }) {
   const scope = `.tclf-form--${publicId}`;
   const vars = (style) => {
     const map = {
@@ -186,9 +186,18 @@ ${scope} {
 ${scope} *, ${scope} *::before, ${scope} *::after { box-sizing: inherit; }
 ${scope} .tclf-grid { display: flex; flex-wrap: wrap; gap: var(--tclf-gap); }
 ${scope} .tclf-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-${scope} .tclf-col[data-width="full"] { flex: 1 1 100%; }
-${scope} .tclf-col[data-width="half"] { flex: 1 1 calc(50% - (var(--tclf-gap) / 2)); }
-${scope} .tclf-col[data-width="third"] { flex: 1 1 calc(33.333% - (var(--tclf-gap) * 2 / 3)); }
+${scope} .tclf-col[hidden] { display: none; }
+${scope} .tclf-col[data-width="full"] { flex: 0 0 100%; max-width: 100%; }
+${scope} .tclf-col[data-width="threeQuarters"] { flex: 0 0 calc(75% - (var(--tclf-gap) / 4)); max-width: calc(75% - (var(--tclf-gap) / 4)); }
+${scope} .tclf-col[data-width="half"] { flex: 0 0 calc(50% - (var(--tclf-gap) / 2)); max-width: calc(50% - (var(--tclf-gap) / 2)); }
+${scope} .tclf-col[data-width="third"] { flex: 0 0 calc(33.333% - (var(--tclf-gap) * 2 / 3)); max-width: calc(33.333% - (var(--tclf-gap) * 2 / 3)); }
+${scope} .tclf-col[data-width="quarter"] { flex: 0 0 calc(25% - (var(--tclf-gap) * 3 / 4)); max-width: calc(25% - (var(--tclf-gap) * 3 / 4)); }
+${scope} .tclf-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+${scope} .tclf-hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+${scope} .tclf-divider { border: 0; border-top: 1px solid var(--tclf-border); margin: 4px 0; width: 100%; }
+${scope} input[type="checkbox"], ${scope} input[type="radio"] { accent-color: var(--tclf-accent); width: 16px; height: 16px; margin: 2px 0 0; flex-shrink: 0; }
+${scope} .tclf-success { padding: 14px 16px; border-radius: var(--tclf-radius); background: #e3f1df; color: #0c5132; font-size: var(--tclf-input-size); }
+${scope} .tclf-form-error { padding: 10px 12px; border-radius: var(--tclf-radius); background: #fee9e8; color: #8e1f0b; font-size: 14px; flex: 0 0 100%; }
 ${scope} .tclf-label { font-size: var(--tclf-label-size); color: var(--tclf-label); font-weight: 500; }
 ${scope} .tclf-required { color: #d72c0d; margin-inline-start: 2px; }
 ${scope} .tclf-help { font-size: 12px; color: #6d7175; }
@@ -245,9 +254,16 @@ ${scope}.tclf-align-center .tclf-grid { justify-content: center; }
   const mobileCss = `
 @media (max-width: ${BREAKPOINT_MOBILE}px) {
 ${scope} {${vars(mobileStyle)}}
-${scope} .tclf-col[data-width="half"], ${scope} .tclf-col[data-width="third"] { flex: 1 1 100%; }
+${scope} .tclf-col[data-width] { flex: 0 0 100%; max-width: 100%; }
 }
 `;
 
-  return `${vars(resolveStyle(desktop, mobile, "desktop"))}${desktopCss}${mobileCss}`;
+  // The builder's mobile preview is narrower than the breakpoint without the
+  // browser being, so it applies the mobile rules unconditionally.
+  if (forceMobile) {
+    return `${scope} {${vars(mobileStyle)}}${desktopCss}
+${scope} .tclf-col[data-width] { flex: 0 0 100%; max-width: 100%; }`;
+  }
+
+  return `${scope} {${vars(resolveStyle(desktop, mobile, "desktop"))}}${desktopCss}${mobileCss}`;
 }

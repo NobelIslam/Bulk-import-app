@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import { getPublishedForm, createSubmission, countSubmissionsThisMonth } from "../forms/forms.server";
 import { checkSubmissionLimit } from "../config/limits.server";
 import { isHoneypotTripped, validateSubmission } from "../forms/schema.server";
+import { buildFormCss } from "../forms/design";
 
 function json(data, init = {}) {
   return new Response(JSON.stringify(data), {
@@ -46,15 +47,22 @@ export async function loader({ request, params }) {
   const form = await getPublishedForm(shop, params.publicId);
   if (!form) return json({ error: "Form not found." }, { status: 404 });
 
+  const schema = {
+    ...form.schema,
+    fields: (form.schema?.fields || []).filter((field) => field.visible !== false),
+  };
+
   return json({
     form: {
       publicId: form.publicId,
       name: form.name,
-      schema: form.schema,
+      schema,
       desktopStyle: form.desktopStyle,
       mobileStyle: form.mobileStyle,
       placement: form.placement,
     },
+    // Same generator the builder preview uses, so the storefront matches it exactly.
+    css: buildFormCss({ publicId: form.publicId, desktop: form.desktopStyle, mobile: form.mobileStyle }),
   });
 }
 

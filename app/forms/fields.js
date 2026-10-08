@@ -6,8 +6,9 @@
 export const FIELD_GROUPS = [
   { key: "input", title: "Input fields" },
   { key: "choice", title: "Choices" },
-  { key: "advanced", title: "Advanced" },
   { key: "layout", title: "Content" },
+  { key: "advanced", title: "Advanced" },
+  { key: "action", title: "Actions" },
 ];
 
 // ─── Field types ─────────────────────────────────────────────────────────────
@@ -18,7 +19,8 @@ export const FIELD_GROUPS = [
 export const FIELD_TYPES = [
   {
     type: "shortText",
-    label: "Short text",
+    label: "Text input",
+    description: "Collect short text from customers",
     group: "input",
     width: "full",
     control: "input",
@@ -28,6 +30,7 @@ export const FIELD_TYPES = [
   {
     type: "longText",
     label: "Long text",
+    description: "Collect a longer, multi-line answer",
     group: "input",
     width: "full",
     control: "textarea",
@@ -37,8 +40,9 @@ export const FIELD_TYPES = [
   {
     type: "email",
     label: "Email",
+    description: "Collect a valid email address",
     group: "input",
-    width: "half",
+    width: "full",
     control: "email",
     icon: "email",
     defaultLabel: "Email address",
@@ -47,16 +51,18 @@ export const FIELD_TYPES = [
   {
     type: "phone",
     label: "Phone",
+    description: "Collect a phone number",
     group: "input",
-    width: "half",
+    width: "full",
     control: "tel",
-    icon: "mobile",
+    icon: "phone",
     defaultLabel: "Phone number",
-    placeholder: "+1 555 000 0000",
+    placeholder: "(555) 123-4567",
   },
   {
     type: "number",
     label: "Number",
+    description: "Collect a number, with optional limits",
     group: "input",
     width: "half",
     control: "number",
@@ -65,7 +71,8 @@ export const FIELD_TYPES = [
   },
   {
     type: "date",
-    label: "Date",
+    label: "Date picker",
+    description: "Let customers pick a date",
     group: "input",
     width: "half",
     control: "date",
@@ -75,45 +82,40 @@ export const FIELD_TYPES = [
   {
     type: "fileUpload",
     label: "File upload",
-    group: "advanced",
+    description: "Let customers attach a file",
+    group: "input",
     width: "full",
     control: "file",
     icon: "upload",
     defaultLabel: "Attachment",
   },
   {
-    type: "hiddenField",
-    label: "Hidden field",
-    group: "advanced",
-    width: "full",
-    control: "hidden",
-    icon: "eye",
-    defaultLabel: "Hidden field",
-    submissionKey: false,
-  },
-  {
     type: "dropdown",
     label: "Dropdown",
+    description: "Pick one option from a list",
     group: "choice",
-    width: "half",
+    width: "full",
     control: "select",
     icon: "list",
     defaultLabel: "Choose an option",
+    placeholder: "Select an option",
     hasOptions: true,
   },
   {
     type: "radio",
-    label: "Radio buttons",
+    label: "Radio group",
+    description: "Pick exactly one of a few options",
     group: "choice",
     width: "full",
     control: "radio",
-    icon: "select",
+    icon: "radio",
     defaultLabel: "Pick one",
     hasOptions: true,
   },
   {
     type: "checkbox",
     label: "Checkbox",
+    description: "A single yes/no tick box",
     group: "choice",
     width: "full",
     control: "checkbox",
@@ -123,6 +125,7 @@ export const FIELD_TYPES = [
   {
     type: "multiCheckbox",
     label: "Multiple checkboxes",
+    description: "Pick any number of options",
     group: "choice",
     width: "full",
     control: "checkboxGroup",
@@ -133,26 +136,18 @@ export const FIELD_TYPES = [
   {
     type: "consentCheckbox",
     label: "Consent checkbox",
-    group: "advanced",
+    description: "Required agreement, e.g. to be contacted",
+    group: "choice",
     width: "full",
     control: "consent",
     icon: "shield",
-    defaultLabel: "I agree to the privacy policy",
+    defaultLabel: "I agree to be contacted",
     helpText: "Required so visitors know what happens to their data.",
-  },
-  {
-    type: "heading",
-    label: "Heading",
-    group: "layout",
-    width: "full",
-    control: "heading",
-    icon: "heading",
-    defaultLabel: "Section heading",
-    submissionKey: false,
   },
   {
     type: "paragraph",
     label: "Paragraph",
+    description: "Instructions or supporting text",
     group: "layout",
     width: "full",
     control: "paragraph",
@@ -161,9 +156,42 @@ export const FIELD_TYPES = [
     submissionKey: false,
   },
   {
+    type: "heading",
+    label: "Heading",
+    description: "A title to split the form into sections",
+    group: "layout",
+    width: "full",
+    control: "heading",
+    icon: "heading",
+    defaultLabel: "Section heading",
+    submissionKey: false,
+  },
+  {
+    type: "divider",
+    label: "Divider",
+    description: "A horizontal line between sections",
+    group: "layout",
+    width: "full",
+    control: "divider",
+    icon: "divider",
+    defaultLabel: "Divider",
+    submissionKey: false,
+  },
+  {
+    type: "hiddenField",
+    label: "Hidden field",
+    description: "Send a fixed value with every submission",
+    group: "advanced",
+    width: "full",
+    control: "hidden",
+    icon: "eye",
+    defaultLabel: "Hidden field",
+  },
+  {
     type: "submitButton",
     label: "Submit button",
-    group: "layout",
+    description: "Sends the form",
+    group: "action",
     width: "full",
     control: "submit",
     icon: "button",
@@ -179,6 +207,96 @@ export const FIELD_TYPE_MAP = FIELD_TYPES.reduce((acc, field) => {
 
 export function getFieldType(type) {
   return FIELD_TYPE_MAP[type] || null;
+}
+
+// ─── Layout ──────────────────────────────────────────────────────────────────
+
+// `third` predates the 25/50/75/100 picker; templates still use it.
+export const FIELD_WIDTHS = ["quarter", "third", "half", "threeQuarters", "full"];
+
+export const WIDTH_OPTIONS = [
+  { value: "quarter", label: "25%" },
+  { value: "third", label: "33%" },
+  { value: "half", label: "50%" },
+  { value: "threeQuarters", label: "75%" },
+  { value: "full", label: "100%" },
+];
+
+export const SPACING_SIDES = ["top", "right", "bottom", "left"];
+const SPACING_MAX = 96;
+
+export function defaultSpacing() {
+  return {
+    margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    padding: { top: 0, right: 0, bottom: 0, left: 0 },
+  };
+}
+
+function normalizeBox(raw) {
+  const out = {};
+  SPACING_SIDES.forEach((side) => {
+    const num = Number(raw?.[side]);
+    out[side] = Number.isFinite(num) ? Math.min(SPACING_MAX, Math.max(0, Math.round(num))) : 0;
+  });
+  return out;
+}
+
+export function normalizeSpacing(raw) {
+  return { margin: normalizeBox(raw?.margin), padding: normalizeBox(raw?.padding) };
+}
+
+// Only plain class tokens survive, so the value can never break out of the attribute.
+export function sanitizeClassName(value) {
+  return String(value || "")
+    .replace(/[^a-zA-Z0-9_\- ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
+// ─── Validation presets ──────────────────────────────────────────────────────
+
+export const VALIDATION_PRESETS = [
+  { value: "none", label: "None", pattern: "" },
+  { value: "letters", label: "Letters only", pattern: "^[A-Za-z\\s'.-]+$", message: "Use letters only." },
+  { value: "numbers", label: "Numbers only", pattern: "^[0-9]+$", message: "Use numbers only." },
+  { value: "alphanumeric", label: "Letters and numbers", pattern: "^[A-Za-z0-9\\s]+$", message: "Use letters and numbers only." },
+  { value: "url", label: "Website URL", pattern: "^https?://\\S+$", message: "Enter a full URL starting with http:// or https://." },
+  { value: "custom", label: "Custom pattern (regex)", pattern: null },
+];
+
+// Fields where a text pattern makes sense.
+export const PATTERN_FIELD_TYPES = ["shortText", "longText", "phone"];
+
+export function presetForValidation(validation) {
+  const pattern = validation?.pattern || "";
+  if (!pattern) return validation?.preset === "custom" ? "custom" : "none";
+  const match = VALIDATION_PRESETS.find((preset) => preset.pattern && preset.pattern === pattern);
+  return match ? match.value : "custom";
+}
+
+// ─── Conditional visibility ──────────────────────────────────────────────────
+
+function isAnswered(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  return String(value).trim() !== "" && String(value) !== "false";
+}
+
+// Shared by the builder preview, the storefront runtime contract and the server,
+// so a field hidden on the page is never required on submit.
+export function isConditionMet(field, fields, values) {
+  const condition = field?.conditional;
+  if (!condition?.fieldId) return true;
+  const source = (fields || []).find((entry) => entry.id === condition.fieldId);
+  if (!source || !source.key) return true;
+  const value = values?.[source.key];
+  const expected = String(condition.equals ?? "").trim();
+  if (!expected) return isAnswered(value);
+  if (Array.isArray(value)) return value.map(String).includes(expected);
+  if (value === true || value === "true" || value === "on") return ["true", "yes", "on", "checked"].includes(expected.toLowerCase());
+  return String(value ?? "").trim().toLowerCase() === expected.toLowerCase();
 }
 
 // ─── Field factories ─────────────────────────────────────────────────────────
@@ -218,17 +336,22 @@ export function defaultField(type, takenKeys = []) {
     label,
     placeholder: meta.placeholder || "",
     helpText: meta.helpText || "",
-    required: meta.type === "consentCheckbox" ? true : false,
+    required: meta.type === "consentCheckbox",
     defaultValue: "",
     width: meta.width,
     options: meta.hasOptions ? ["Option 1", "Option 2"] : [],
     validation: defaultValidation(),
     conditional: null,
+    visible: true,
+    hideLabel: false,
+    cssClass: "",
+    spacing: defaultSpacing(),
   };
 }
 
 export function defaultValidation() {
   return {
+    preset: "none",
     min: null,
     max: null,
     minLength: null,
@@ -236,6 +359,27 @@ export function defaultValidation() {
     pattern: "",
     patternMessage: "",
   };
+}
+
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function normalizeValidation(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const preset = VALIDATION_PRESETS.some((entry) => entry.value === source.preset) ? source.preset : null;
+  const next = {
+    min: numberOrNull(source.min),
+    max: numberOrNull(source.max),
+    minLength: numberOrNull(source.minLength),
+    maxLength: numberOrNull(source.maxLength),
+    pattern: String(source.pattern ?? "").slice(0, 200),
+    patternMessage: String(source.patternMessage ?? "").slice(0, 200),
+  };
+  next.preset = preset === "custom" ? "custom" : presetForValidation(next);
+  return next;
 }
 
 // ─── Schema helpers ──────────────────────────────────────────────────────────
@@ -282,20 +426,7 @@ export function emptySchema() {
 }
 
 export function createSubmitField() {
-  return {
-    id: createFieldId(),
-    type: "submitButton",
-    key: null,
-    label: "Submit",
-    placeholder: "",
-    helpText: "",
-    required: false,
-    defaultValue: "",
-    width: "full",
-    options: [],
-    validation: defaultValidation(),
-    conditional: null,
-  };
+  return { ...defaultField("submitButton"), label: "Submit" };
 }
 
 // Fields that are actually captured in a submission payload.
@@ -323,19 +454,16 @@ export function normalizeSchema(raw) {
       if (!meta) return null;
       const next = defaultField(meta.type, takenKeys);
       next.id = typeof field.id === "string" && field.id ? field.id.slice(0, 40) : next.id;
-      next.label = String(field.label ?? next.label).slice(0, 120);
+      next.label = String(field.label ?? next.label).slice(0, 300);
       next.placeholder = String(field.placeholder ?? "").slice(0, 200);
       next.helpText = String(field.helpText ?? "").slice(0, 300);
       next.required = Boolean(field.required);
       next.defaultValue = typeof field.defaultValue === "string" ? field.defaultValue.slice(0, 500) : "";
-      next.width = ["full", "half", "third"].includes(field.width) ? field.width : meta.width;
+      next.width = FIELD_WIDTHS.includes(field.width) ? field.width : meta.width;
       next.options = Array.isArray(field.options)
         ? field.options.slice(0, 50).map((option) => String(option).slice(0, 120))
         : [];
-      next.validation = {
-        ...defaultValidation(),
-        ...(typeof field.validation === "object" && field.validation ? field.validation : {}),
-      };
+      next.validation = normalizeValidation(field.validation);
       next.key =
         meta.submissionKey === false
           ? null
@@ -350,6 +478,10 @@ export function normalizeSchema(raw) {
               equals: String(field.conditional.equals ?? "").slice(0, 120),
             }
           : null;
+      next.visible = field.visible !== false;
+      next.hideLabel = Boolean(field.hideLabel);
+      next.cssClass = sanitizeClassName(field.cssClass);
+      next.spacing = normalizeSpacing(field.spacing);
       return next;
     })
     .filter(Boolean);
@@ -364,9 +496,3 @@ export function normalizeSchema(raw) {
     settings: { ...base.settings, ...(typeof raw?.settings === "object" && raw.settings ? raw.settings : {}) },
   };
 }
-
-export const WIDTH_LABELS = {
-  full: "Full width",
-  half: "Half width",
-  third: "One third",
-};
