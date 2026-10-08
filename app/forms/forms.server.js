@@ -225,8 +225,8 @@ export async function createSubmission({ shop, formId, data, meta, ipHash }) {
   });
 }
 
-export async function listSubmissions(shop, { formId, search, from, to, take = 50, skip = 0 } = {}) {
-  const where = {
+function submissionsWhere(shop, { formId, search, from, to } = {}) {
+  return {
     shop,
     ...(formId ? { formId } : {}),
     ...(from || to
@@ -246,20 +246,31 @@ export async function listSubmissions(shop, { formId, search, from, to, take = 5
         }
       : {}),
   };
+}
 
-  return db.submission.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: Math.min(Math.max(Number(take) || 50, 1), 100),
-    skip: Math.max(Number(skip) || 0, 0),
-    include: { form: { select: { id: true, name: true, publicId: true } } },
-  });
+export async function listSubmissions(shop, { formId, search, from, to, take = 20, skip = 0 } = {}) {
+  const where = submissionsWhere(shop, { formId, search, from, to });
+  const pageSize = Math.min(Math.max(Number(take) || 20, 1), 100);
+  const offset = Math.max(Number(skip) || 0, 0);
+
+  const [submissions, total] = await Promise.all([
+    db.submission.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: pageSize,
+      skip: offset,
+      include: { form: { select: { id: true, name: true, publicId: true, schema: true } } },
+    }),
+    db.submission.count({ where }),
+  ]);
+
+  return { submissions, total, take: pageSize, skip: offset };
 }
 
 export async function getSubmission(shop, submissionId) {
   return db.submission.findFirst({
     where: { id: submissionId, shop },
-    include: { form: { select: { id: true, name: true, publicId: true } } },
+    include: { form: { select: { id: true, name: true, publicId: true, schema: true } } },
   });
 }
 

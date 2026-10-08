@@ -244,7 +244,7 @@ function DeleteModal({ form, busy, onCancel, onConfirm }) {
   return (
     <Modal
       open={Boolean(form)}
-      onDismiss={onCancel}
+      onClose={onCancel}
       title={`Delete ${form?.name}?`}
       primaryAction={{ content: "Delete form", tone: "critical", loading: busy, onAction: onConfirm }}
       secondaryActions={[{ content: "Cancel", onAction: onCancel }]}
@@ -272,7 +272,7 @@ function RenameModal({ form, busy, onCancel, onConfirm }) {
   return (
     <Modal
       open={Boolean(form)}
-      onDismiss={onCancel}
+      onClose={onCancel}
       title="Rename form"
       primaryAction={{
         content: "Save",

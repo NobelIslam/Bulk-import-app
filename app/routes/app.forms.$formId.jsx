@@ -534,6 +534,7 @@ function Canvas({
   onRemove,
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_DROP_ID });
+  const hasInputFields = fields.some((field) => field.type !== "submitButton");
 
   return (
     <Box padding="400">
@@ -548,12 +549,32 @@ function Canvas({
             alignItems: "flex-start",
             gap: 12,
             minHeight: 120,
+            padding: isOver ? 8 : 0,
             borderRadius: 8,
             outline: isOver ? "2px dashed #2c6ecb" : "none",
             outlineOffset: 4,
+            background: isOver ? "rgba(44, 110, 203, 0.04)" : "transparent",
+            transition: "background 0.12s ease, padding 0.12s ease",
             textAlign: desktopStyle?.alignment || "left",
           }}
         >
+          {!hasInputFields && (
+            <div
+              style={{
+                flex: "1 1 100%",
+                border: "2px dashed #c9cccf",
+                borderRadius: 8,
+                padding: "28px 16px",
+                textAlign: "center",
+                color: "#6d7175",
+                background: "#fafbfb",
+              }}
+            >
+              <Text as="p" variant="bodySm" tone="subdued">
+                Drag a field here from the left, or click one to add it.
+              </Text>
+            </div>
+          )}
           <SortableContext items={fields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
             {fields.map((field) => (
               <CanvasField
@@ -570,13 +591,6 @@ function Canvas({
             ))}
           </SortableContext>
         </div>
-        {fields.length === 0 && (
-          <BlockStack gap="100">
-            <Text as="p" variant="bodySm" tone="subdued">
-              Drag fields here from the left, or click one to add it.
-            </Text>
-          </BlockStack>
-        )}
       </div>
     </Box>
   );
