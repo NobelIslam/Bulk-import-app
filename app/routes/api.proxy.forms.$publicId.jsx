@@ -41,8 +41,8 @@ async function readPayload(request) {
 }
 
 export async function loader({ request, params }) {
-  const context = await authenticate.public.appProxy(request);
-  const shop = context.session?.shop;
+  const { session } = await authenticate.public.appProxy(request);
+  const shop = session?.shop;
   if (!shop) return json({ error: "This form is not available." }, { status: 401 });
 
   const form = await getPublishedForm(shop, params.publicId);
