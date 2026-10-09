@@ -8,11 +8,6 @@ embedded = true
 [build]
 automatically_update_urls_on_dev = true
 
-[app_proxy]
-url = "https://bulk-importer-app.onrender.com/api/proxy/forms"
-prefix = "apps"
-subpath = "forms"
-
 [webhooks]
 api_version = "2026-04"
 
