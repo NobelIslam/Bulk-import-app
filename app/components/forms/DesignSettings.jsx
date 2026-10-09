@@ -2,6 +2,7 @@ import { RangeSlider, Select } from "@shopify/polaris";
 import { ALIGNMENTS, BUTTON_STYLES, FONT_FAMILIES, INPUT_STYLES, NUMERIC_RANGES } from "../../forms/design";
 import { Section, Switch } from "./FieldSettings";
 import { ColorField } from "./ContentControls";
+import { parseColor, toHex } from "../../forms/color";
 
 const typography = [
   ["labelFontSize", "Label size"],
@@ -18,7 +19,6 @@ const layout = [
 ];
 
 const colorFields = [
-  ["backgroundColor", "Background"],
   ["textColor", "Text"],
   ["labelColor", "Labels"],
   ["borderColor", "Input borders"],
@@ -31,6 +31,8 @@ const colorFields = [
 // inherited desktop value until it is overridden.
 export default function DesignSettings({ style, onChange }) {
   const current = style || {};
+  const cardColor = parseColor(current.backgroundColor) || { r: 255, g: 255, b: 255, a: 1 };
+  const setCardAlpha = (alpha) => onChange({ backgroundColor: toHex({ ...cardColor, a: alpha }) });
 
   const slider = ([key, label]) => {
     const [min, max] = NUMERIC_RANGES[key];
@@ -58,6 +60,35 @@ export default function DesignSettings({ style, onChange }) {
           onChange={(fontFamily) => onChange({ fontFamily })}
         />
         {typography.map(slider)}
+      </Section>
+
+      <Section title="Card" defaultOpen>
+        <ColorField
+          label="Card background"
+          value={current.backgroundColor || ""}
+          onChange={(backgroundColor) => onChange({ backgroundColor })}
+        />
+        <RangeSlider
+          label="Background opacity"
+          min={0}
+          max={100}
+          value={Math.round(cardColor.a * 100)}
+          output
+          suffix={<span style={{ minWidth: 44, textAlign: "right", display: "inline-block" }}>{Math.round(cardColor.a * 100)}%</span>}
+          onChange={(value) => setCardAlpha(value / 100)}
+        />
+        <Switch
+          label="Transparent background"
+          description="Lets your page's own background show through the form."
+          checked={cardColor.a === 0}
+          onChange={(transparent) => setCardAlpha(transparent ? 0 : 1)}
+        />
+        <Switch
+          label="Card shadow"
+          description="Adds a soft shadow around the form."
+          checked={Boolean(current.showShadow)}
+          onChange={(showShadow) => onChange({ showShadow })}
+        />
       </Section>
 
       <Section title="Colors" defaultOpen>
@@ -88,12 +119,6 @@ export default function DesignSettings({ style, onChange }) {
           options={BUTTON_STYLES}
           value={current.buttonStyle || "solid"}
           onChange={(buttonStyle) => onChange({ buttonStyle })}
-        />
-        <Switch
-          label="Card shadow"
-          description="Adds a soft shadow around the form."
-          checked={Boolean(current.showShadow)}
-          onChange={(showShadow) => onChange({ showShadow })}
         />
       </Section>
     </div>

@@ -325,9 +325,7 @@
 }
 
 .fb-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 0 16px;
+  padding: 6px 8px;
   margin-bottom: 20px;
   background: #ffffff;
   border: 1px solid var(--fb-border);
@@ -881,19 +879,11 @@
   border-bottom: 1px solid var(--fb-border);
 }
 .fb-section__toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 14px 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 15px;
+  padding: 8px 0;
+  margin-inline: -8px;
+}
+.fb-section__toggle .Polaris-Button {
   font-weight: 650;
-  color: var(--fb-text);
-  cursor: pointer;
-  text-align: left;
 }
 .fb-section__body {
   display: flex;
@@ -1055,16 +1045,25 @@ textarea.fb-copy__value {
 
 /* ─── Responsive ──────────────────────────────────────────────────────────── */
 
+/* Settings and Publish have no right-hand panel. */
+.fb-root.fb-root--no-panel {
+  grid-template-columns: 284px minmax(0, 1fr);
+}
+
 @media (max-width: 1280px) {
   .fb-root {
     grid-template-columns: 240px minmax(0, 1fr) 320px;
+  }
+  .fb-root.fb-root--no-panel {
+    grid-template-columns: 240px minmax(0, 1fr);
   }
   .fb-main {
     padding: 20px;
   }
 }
 @media (max-width: 1000px) {
-  .fb-root {
+  .fb-root,
+  .fb-root.fb-root--no-panel {
     grid-template-columns: 1fr;
     height: auto;
   }
@@ -1084,4 +1083,28 @@ textarea.fb-copy__value {
     order: 3;
     border-top: 1px solid var(--fb-border);
   }
+}
+
+/* ─── Color picker popover ────────────────────────────────────────────────── */
+
+.fb-colorpop {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 264px;
+}
+.fb-colorpop__row {
+  display: flex;
+  gap: 8px;
+}
+.fb-colorpop__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.fb-colorpop__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }

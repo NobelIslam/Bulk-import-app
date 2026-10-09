@@ -1,7 +1,7 @@
 {%- liquid
   assign tcl_form_id = block.settings.form_id | default: '' | strip
 -%}
-<div class="tcl-form-block" style="--tcl-block-pt: {{ block.settings.padding_top }}px; --tcl-block-pb: {{ block.settings.padding_bottom }}px;" {{ block.shopify_attributes }}>
+<div class="tcl-form-block tcl-form-block--{{ block.settings.width | default: 'form' }}" style="--tcl-block-pt: {{ block.settings.padding_top }}px; --tcl-block-pb: {{ block.settings.padding_bottom }}px;" {{ block.shopify_attributes }}>
   {%- if tcl_form_id != blank -%}
     <div class="tcl-form-host" data-tcl-form="{{ tcl_form_id | escape }}" data-tcl-form-mode="inline"></div>
   {%- elsif request.design_mode -%}
@@ -24,6 +24,18 @@
       "id": "form_id",
       "label": "Form ID",
       "info": "Copy the form ID from the Publish tab of the form in the TCL Forms app."
+    },
+    {
+      "type": "select",
+      "id": "width",
+      "label": "Form width",
+      "options": [
+        { "value": "form", "label": "Form's own width (set in the app)" },
+        { "value": "container", "label": "Container width" },
+        { "value": "full", "label": "Full width" }
+      ],
+      "default": "form",
+      "info": "Container width fills this section's content area. Full width stretches edge to edge across the screen."
     },
     {
       "type": "range",

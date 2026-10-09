@@ -20,7 +20,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Banner, Button, Modal } from "@shopify/polaris";
+import { Banner, Button, ButtonGroup, Modal, Tabs, Tooltip } from "@shopify/polaris";
 import {
   ChevronRightIcon,
   ClipboardIcon,
@@ -381,6 +381,8 @@ export default function FormBuilder() {
     />
   );
 
+  const showPanel = tab === "build" || tab === "design";
+
   return (
     <DndContext
       sensors={sensors}
@@ -389,7 +391,7 @@ export default function FormBuilder() {
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveDrag(null)}
     >
-      <div className="fb-root">
+      <div className={`fb-root${showPanel ? "" : " fb-root--no-panel"}`}>
         <FieldPalette
           onAddField={(type) => addFieldOfType(type)}
           disabledTypes={hasSubmit ? { submitButton: "Your form already has a submit button." } : {}}
@@ -414,42 +416,40 @@ export default function FormBuilder() {
             </div>
             <div className="fb-header__actions">
               <SaveIndicator state={saveState} savedAt={savedAt} dirty={dirty} />
-              <button type="button" className="fb-icon-btn" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" onClick={undo} disabled={!canUndo}>
-                <UndoIcon width={20} height={20} fill="currentColor" />
-              </button>
-              <button type="button" className="fb-icon-btn" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!canRedo}>
-                <RedoIcon width={20} height={20} fill="currentColor" />
-              </button>
-              <button type="button" className="fb-btn" onClick={() => setPreviewOpen(true)}>
-                <ViewIcon width={20} height={20} fill="currentColor" aria-hidden="true" />
+              <Tooltip content="Undo (Ctrl+Z)">
+                <Button icon={UndoIcon} variant="tertiary" accessibilityLabel="Undo" onClick={undo} disabled={!canUndo} />
+              </Tooltip>
+              <Tooltip content="Redo (Ctrl+Shift+Z)">
+                <Button icon={RedoIcon} variant="tertiary" accessibilityLabel="Redo" onClick={redo} disabled={!canRedo} />
+              </Tooltip>
+              <Button icon={ViewIcon} onClick={() => setPreviewOpen(true)}>
                 Preview
-              </button>
-              <button
-                type="button"
-                className="fb-btn"
+              </Button>
+              <Button
                 onClick={() => submitDoc("save", doc)}
-                disabled={!dirty || pendingIntent !== null}
+                disabled={!dirty || (pendingIntent !== null && pendingIntent !== "save")}
+                loading={pendingIntent === "save" && dirty}
               >
-                {pendingIntent === "save" && dirty ? "Saving…" : "Save"}
-              </button>
+                Save
+              </Button>
               {published ? (
-                <button
-                  type="button"
-                  className="fb-btn"
+                <Button
                   onClick={() => submitDoc("unpublish", doc)}
-                  disabled={pendingIntent !== null}
+                  disabled={pendingIntent !== null && pendingIntent !== "unpublish"}
+                  loading={pendingIntent === "unpublish"}
                 >
-                  {pendingIntent === "unpublish" ? "Unpublishing…" : "Unpublish"}
-                </button>
+                  Unpublish
+                </Button>
               ) : (
-                <button
-                  type="button"
-                  className="fb-btn fb-btn--primary"
+                <Button
+                  variant="primary"
+                  tone="success"
                   onClick={() => submitDoc("publish", doc)}
-                  disabled={pendingIntent !== null}
+                  disabled={pendingIntent !== null && pendingIntent !== "publish"}
+                  loading={pendingIntent === "publish"}
                 >
-                  {pendingIntent === "publish" ? "Publishing…" : "Publish"}
-                </button>
+                  Publish
+                </Button>
               )}
             </div>
           </header>
@@ -462,21 +462,12 @@ export default function FormBuilder() {
             </div>
           )}
 
-          <div className="fb-tabs" role="tablist" aria-label="Form builder sections">
-            {TABS.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                role="tab"
-                id={`fb-tab-${entry.id}`}
-                aria-selected={tab === entry.id}
-                aria-controls={`fb-tabpanel-${entry.id}`}
-                className="fb-tab"
-                onClick={() => setTab(entry.id)}
-              >
-                {entry.label}
-              </button>
-            ))}
+          <div className="fb-tabs">
+            <Tabs
+              tabs={TABS.map((entry) => ({ id: `fb-tab-${entry.id}`, content: entry.label, panelID: `fb-tabpanel-${entry.id}` }))}
+              selected={Math.max(TABS.findIndex((entry) => entry.id === tab), 0)}
+              onSelect={(index) => setTab(TABS[index].id)}
+            />
           </div>
 
           <div role="tabpanel" id={`fb-tabpanel-${tab}`} aria-labelledby={`fb-tab-${tab}`}>
@@ -535,6 +526,7 @@ export default function FormBuilder() {
           </div>
         </main>
 
+        {showPanel && (
         <aside className="fb-panel" aria-label="Settings panel">
           {tab === "build" &&
             (selectedField ? (
@@ -575,13 +567,8 @@ export default function FormBuilder() {
               <div className="fb-panel__header">
                 <h2 className="fb-panel__title">Design</h2>
               </div>
-              <div className="fb-seg fb-seg--compact" role="group" aria-label="Viewport" style={{ marginBottom: 8 }}>
-                <button type="button" aria-pressed={viewport === "desktop"} onClick={() => setViewport("desktop")}>
-                  <DesktopIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Desktop
-                </button>
-                <button type="button" aria-pressed={viewport === "mobile"} onClick={() => setViewport("mobile")}>
-                  <MobileIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Mobile
-                </button>
+              <div style={{ marginBottom: 8 }}>
+                <ViewportToggle viewport={viewport} onViewport={setViewport} fullWidth />
               </div>
               <p className="fb-help" style={{ marginBottom: 12 }}>
                 {viewport === "mobile"
@@ -605,27 +592,8 @@ export default function FormBuilder() {
             </>
           )}
 
-          {(tab === "settings" || tab === "publish") && (
-            <>
-              <div className="fb-panel__header">
-                <h2 className="fb-panel__title">Live preview</h2>
-              </div>
-              <div className="fb-preview-stage" style={{ padding: 12 }}>
-                <div className="fb-preview-frame">
-                  <FormPreview
-                    publicId={`${form.publicId}-side`}
-                    schema={doc.schema}
-                    desktopStyle={doc.desktopStyle}
-                    mobileStyle={doc.mobileStyle}
-                    viewport="mobile"
-                    interactive
-                    onSubmitPreview={() => shopify.toast.show("Preview only — nothing was submitted.")}
-                  />
-                </div>
-              </div>
-            </>
-          )}
         </aside>
+        )}
       </div>
 
       <DragOverlay>{activeDrag ? <DragOverlayCard drag={activeDrag} fields={fields} /> : null}</DragOverlay>
@@ -689,18 +657,17 @@ function EditableTitle({ value, onChange }) {
       <h1 className="fb-title" title={value}>
         {value}
       </h1>
-      <button
-        type="button"
-        className="fb-icon-btn"
-        aria-label="Rename form"
-        title="Rename form"
-        onClick={() => {
-          setDraft(value);
-          setEditing(true);
-        }}
-      >
-        <EditIcon width={20} height={20} fill="currentColor" />
-      </button>
+      <Tooltip content="Rename form">
+        <Button
+          icon={EditIcon}
+          variant="tertiary"
+          accessibilityLabel="Rename form"
+          onClick={() => {
+            setDraft(value);
+            setEditing(true);
+          }}
+        />
+      </Tooltip>
     </>
   );
 }
@@ -725,15 +692,21 @@ function PreviewToolbar({ viewport, onViewport, title }) {
       <span className="fb-help" style={{ margin: 0 }}>
         {title}
       </span>
-      <div className="fb-seg fb-seg--compact" role="group" aria-label="Preview size">
-        <button type="button" aria-pressed={viewport === "desktop"} onClick={() => onViewport("desktop")}>
-          <DesktopIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Desktop
-        </button>
-        <button type="button" aria-pressed={viewport === "mobile"} onClick={() => onViewport("mobile")}>
-          <MobileIcon width={18} height={18} fill="currentColor" aria-hidden="true" /> Mobile
-        </button>
-      </div>
+      <ViewportToggle viewport={viewport} onViewport={onViewport} />
     </div>
+  );
+}
+
+function ViewportToggle({ viewport, onViewport, fullWidth = false }) {
+  return (
+    <ButtonGroup variant="segmented" fullWidth={fullWidth}>
+      <Button icon={DesktopIcon} pressed={viewport === "desktop"} onClick={() => onViewport("desktop")}>
+        Desktop
+      </Button>
+      <Button icon={MobileIcon} pressed={viewport === "mobile"} onClick={() => onViewport("mobile")}>
+        Mobile
+      </Button>
+    </ButtonGroup>
   );
 }
 
@@ -791,9 +764,9 @@ function Canvas({
           twoColumn ? (
             <>
               Two-column layout.{" "}
-              <button type="button" className="fb-linkbtn" onClick={onEditLayout}>
+              <Button variant="plain" onClick={onEditLayout}>
                 Edit side column
-              </button>
+              </Button>
             </>
           ) : (
             "Click a field to edit it. Drag the handle to reorder."
@@ -892,50 +865,49 @@ function CanvasRow({ field, fields, submitText, buttonStyle, selected, onSelect,
           {meta?.label}
           {field.width !== "full" ? ` · ${WIDTH_LABEL[field.width]}` : ""}
         </span>
-        <button
-          type="button"
-          className={`fb-icon-btn fb-icon-btn--sm${selected ? " fb-icon-btn--active" : ""}`}
-          aria-label={`Edit settings for ${name}`}
-          title="Field settings"
-          onClick={stop(onSelect)}
-        >
-          <SettingsIcon width={16} height={16} fill="currentColor" />
-        </button>
-        <button
-          type="button"
-          className="fb-icon-btn fb-icon-btn--sm"
-          aria-label={`Duplicate ${name}`}
-          title={isSubmit ? "A form has one submit button" : "Duplicate"}
-          onClick={stop(onDuplicate)}
-          disabled={isSubmit}
-        >
-          <DuplicateIcon width={16} height={16} fill="currentColor" />
-        </button>
-        <button
-          type="button"
-          className="fb-icon-btn fb-icon-btn--sm"
-          aria-label={visible ? `Hide ${name} from the form` : `Show ${name} on the form`}
-          aria-pressed={!visible}
-          title={isSubmit ? "The submit button is always shown" : visible ? "Hide from form" : "Show on form"}
-          onClick={stop(onToggleVisible)}
-          disabled={isSubmit}
-        >
-          {visible ? (
-            <ViewIcon width={16} height={16} fill="currentColor" />
-          ) : (
-            <HideIcon width={16} height={16} fill="currentColor" />
-          )}
-        </button>
-        <button
-          type="button"
-          className="fb-icon-btn fb-icon-btn--sm fb-icon-btn--critical"
-          aria-label={`Delete ${name}`}
-          title={isSubmit ? "Every form needs a submit button" : "Delete"}
-          onClick={stop(onRemove)}
-          disabled={isSubmit}
-        >
-          <DeleteIcon width={16} height={16} fill="currentColor" />
-        </button>
+        {/* Polaris passes the click event through, so the row's own select handler can be skipped. */}
+        <Tooltip content="Field settings">
+          <Button
+            icon={SettingsIcon}
+            size="slim"
+            variant="tertiary"
+            pressed={selected}
+            accessibilityLabel={`Edit settings for ${name}`}
+            onClick={stop(onSelect)}
+          />
+        </Tooltip>
+        <Tooltip content={isSubmit ? "A form has one submit button" : "Duplicate"}>
+          <Button
+            icon={DuplicateIcon}
+            size="slim"
+            variant="tertiary"
+            accessibilityLabel={`Duplicate ${name}`}
+            onClick={stop(onDuplicate)}
+            disabled={isSubmit}
+          />
+        </Tooltip>
+        <Tooltip content={isSubmit ? "The submit button is always shown" : visible ? "Hide from form" : "Show on form"}>
+          <Button
+            icon={visible ? ViewIcon : HideIcon}
+            size="slim"
+            variant="tertiary"
+            pressed={!visible}
+            accessibilityLabel={visible ? `Hide ${name} from the form` : `Show ${name} on the form`}
+            onClick={stop(onToggleVisible)}
+            disabled={isSubmit}
+          />
+        </Tooltip>
+        <Tooltip content={isSubmit ? "Every form needs a submit button" : "Delete"}>
+          <Button
+            icon={DeleteIcon}
+            size="slim"
+            variant="tertiary"
+            tone="critical"
+            accessibilityLabel={`Delete ${name}`}
+            onClick={stop(onRemove)}
+            disabled={isSubmit}
+          />
+        </Tooltip>
       </div>
 
       <div className="fb-row__body">
@@ -1005,13 +977,13 @@ function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpubl
             </p>
           </div>
           {published ? (
-            <button type="button" className="fb-btn" onClick={onUnpublish} disabled={busy}>
+            <Button onClick={onUnpublish} disabled={busy}>
               Unpublish
-            </button>
+            </Button>
           ) : (
-            <button type="button" className="fb-btn fb-btn--primary" onClick={onPublish} disabled={busy}>
+            <Button variant="primary" tone="success" onClick={onPublish} disabled={busy}>
               Publish form
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -1041,10 +1013,9 @@ function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpubl
             </p>
             {blockUrl && (
               <div style={{ marginTop: 8 }}>
-                <a className="fb-btn" href={blockUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
-                  <ExternalIcon width={18} height={18} fill="currentColor" aria-hidden="true" />
+                <Button icon={ExternalIcon} url={blockUrl} target="_top">
                   Open theme editor
-                </a>
+                </Button>
               </div>
             )}
           </div>
@@ -1078,10 +1049,9 @@ function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpubl
           <CopyField value={shortCode} label="Short code" onCopied={onCopied} />
           {embedUrl && (
             <div style={{ marginTop: 8 }}>
-              <a className="fb-btn" href={embedUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
-                <ExternalIcon width={18} height={18} fill="currentColor" aria-hidden="true" />
+              <Button icon={ExternalIcon} url={embedUrl} target="_top">
                 Turn on app embed
-              </a>
+              </Button>
             </div>
           )}
         </div>

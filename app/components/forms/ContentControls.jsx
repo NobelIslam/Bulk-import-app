@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { Button, TextField } from "@shopify/polaris";
+import { Button, ButtonGroup, ColorPicker, DropZone, Popover, Select, TextField, Tooltip } from "@shopify/polaris";
 import {
   LinkIcon,
   ListBulletedIcon,
@@ -11,10 +11,10 @@ import {
   TextBoldIcon,
   TextItalicIcon,
   TextUnderlineIcon,
-  UploadIcon,
   XIcon,
 } from "@shopify/polaris-icons";
 import { sanitizeRichText, sanitizeUrl } from "../../forms/content";
+import { formatColor, hsbToRgb, parseColor, rgbToHsb, toHex } from "../../forms/color";
 
 // ─── Rich text ───────────────────────────────────────────────────────────────
 
@@ -98,45 +98,41 @@ export function RichTextEditor({ label, value, onChange, allowLists = true, minH
     <div className="fb-rte">
       {label && <span className="fb-field-label">{label}</span>}
       <div className="fb-rte__box">
-        <div className="fb-rte__toolbar" role="toolbar" aria-label={`${label || "Text"} formatting`}>
+        {/* Keeping mousedown from bubbling to focus keeps the editor's text selection. */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+        <div
+          className="fb-rte__toolbar"
+          role="toolbar"
+          aria-label={`${label || "Text"} formatting`}
+          onMouseDown={(event) => event.preventDefault()}
+        >
           {tools.map(({ command, label: toolLabel, Icon, text }) => (
-            <button
-              key={command}
-              type="button"
-              className="fb-rte__btn"
-              aria-label={toolLabel}
-              title={toolLabel}
-              aria-pressed={Boolean(active[command])}
-              // Keep the text selection: mousedown would otherwise blur the editor.
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => run(command)}
-            >
-              {Icon ? <Icon width={18} height={18} fill="currentColor" /> : <s style={{ fontWeight: 600 }}>{text}</s>}
-            </button>
+            <Tooltip key={command} content={toolLabel}>
+              <Button
+                size="slim"
+                variant="tertiary"
+                icon={Icon || <StrikeGlyph text={text} />}
+                accessibilityLabel={toolLabel}
+                pressed={Boolean(active[command])}
+                onClick={() => run(command)}
+              />
+            </Tooltip>
           ))}
-          <button
-            type="button"
-            className="fb-rte__btn"
-            aria-label="Add link to selected text"
-            title="Link (select text first)"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={addLink}
-          >
-            <LinkIcon width={18} height={18} fill="currentColor" />
-          </button>
-          <button
-            type="button"
-            className="fb-rte__btn"
-            aria-label="Clear formatting"
-            title="Clear formatting"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              run("removeFormat");
-              run("unlink");
-            }}
-          >
-            <XIcon width={18} height={18} fill="currentColor" />
-          </button>
+          <Tooltip content="Link (select text first)">
+            <Button size="slim" variant="tertiary" icon={LinkIcon} accessibilityLabel="Add link to selected text" onClick={addLink} />
+          </Tooltip>
+          <Tooltip content="Clear formatting">
+            <Button
+              size="slim"
+              variant="tertiary"
+              icon={XIcon}
+              accessibilityLabel="Clear formatting"
+              onClick={() => {
+                run("removeFormat");
+                run("unlink");
+              }}
+            />
+          </Tooltip>
         </div>
         {linkDraft && (
           <div className="fb-rte__link">
@@ -200,28 +196,31 @@ export function AlignmentPicker({ label = "Alignment", value, onChange, options 
   return (
     <div>
       <span className="fb-field-label">{label}</span>
-      <div className="fb-seg" role="group" aria-label={label}>
+      <ButtonGroup variant="segmented" fullWidth>
         {options.map((option) => {
-          const Icon = ALIGN_ICONS[option];
           const name = option[0].toUpperCase() + option.slice(1);
           return (
-            <button key={option} type="button" aria-pressed={value === option} aria-label={name} title={name} onClick={() => onChange(option)}>
-              {Icon ? (
-                <Icon width={18} height={18} fill="currentColor" style={{ verticalAlign: "middle" }} />
-              ) : (
-                <JustifyIcon />
-              )}
-            </button>
+            <Button
+              key={option}
+              icon={ALIGN_ICONS[option] || JustifyIcon}
+              accessibilityLabel={name}
+              pressed={value === option}
+              onClick={() => onChange(option)}
+            />
           );
         })}
-      </div>
+      </ButtonGroup>
     </div>
   );
 }
 
-function JustifyIcon() {
+function StrikeGlyph({ text }) {
+  return <s style={{ fontWeight: 600, lineHeight: "20px" }}>{text}</s>;
+}
+
+function JustifyIcon(props) {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style={{ verticalAlign: "middle" }}>
+    <svg viewBox="0 0 20 20" {...props}>
       <rect x="3" y="4" width="14" height="1.6" rx=".8" />
       <rect x="3" y="8" width="14" height="1.6" rx=".8" />
       <rect x="3" y="12" width="14" height="1.6" rx=".8" />
@@ -235,7 +234,6 @@ function JustifyIcon() {
 // URL field plus an upload button that stores the file in Shopify Files.
 export function ImagePicker({ label = "Image", value, onChange, onError }) {
   const fetcher = useFetcher();
-  const inputRef = useRef(null);
   const uploading = fetcher.state !== "idle";
 
   useEffect(() => {
@@ -259,36 +257,22 @@ export function ImagePicker({ label = "Image", value, onChange, onError }) {
       {value ? (
         <div className="fb-image-picker__preview">
           <img src={value} alt="" />
-          <button type="button" className="fb-icon-btn" aria-label="Remove image" title="Remove image" onClick={() => onChange("")}>
-            <XIcon width={18} height={18} fill="currentColor" />
-          </button>
+          <Button icon={XIcon} variant="tertiary" accessibilityLabel="Remove image" onClick={() => onChange("")} />
         </div>
       ) : (
-        <button
-          type="button"
-          className="fb-image-picker__drop"
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            upload(event.dataTransfer.files?.[0]);
-          }}
+        <DropZone
+          accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+          type="image"
+          allowMultiple={false}
           disabled={uploading}
+          onDrop={(_files, accepted) => upload(accepted[0])}
         >
-          <UploadIcon width={22} height={22} fill="currentColor" aria-hidden="true" />
-          <span>{uploading ? "Uploading…" : "Upload an image or drop it here"}</span>
-        </button>
+          <DropZone.FileUpload
+            actionTitle={uploading ? "Uploading…" : "Upload image"}
+            actionHint="or drop an image here"
+          />
+        </DropZone>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-        hidden
-        onChange={(event) => {
-          upload(event.target.files?.[0]);
-          event.target.value = "";
-        }}
-      />
       <div style={{ marginTop: 8 }}>
         <TextField
           label="Image URL"
@@ -305,45 +289,162 @@ export function ImagePicker({ label = "Image", value, onChange, onError }) {
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
-const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const PRESET_COLORS = ["#000000", "#ffffff", "#202223", "#616161", "#f6f6f7", "#005bd3", "#008060", "#d72c0d", "#ffc453", "#8051ff"];
+const FORMATS = [
+  { label: "HEX", value: "hex" },
+  { label: "RGBA", value: "rgba" },
+  { label: "HSLA", value: "hsla" },
+];
+const CHECKERBOARD = "repeating-conic-gradient(#d4d4d4 0% 25%, #ffffff 0% 50%) 50% / 8px 8px";
 
-// `placeholder` + `clearButton` let optional colors fall back to the form's own.
+function Swatch({ color, size = 20 }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: "block",
+        width: size,
+        height: size,
+        borderRadius: 4,
+        boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.18)",
+        background: color ? `linear-gradient(${color}, ${color}), ${CHECKERBOARD}` : CHECKERBOARD,
+      }}
+    />
+  );
+}
+
+// Color input with an advanced picker: saturation/hue/opacity, HEX, RGBA or
+// HSLA entry, presets and a one-click transparent option. Whatever is typed is
+// stored as hex (#rrggbbaa when partly transparent).
 export function ColorField({ label, value, onChange, placeholder, helpText }) {
-  const swatchColor = HEX_PATTERN.test(value) ? value : "#ffffff";
+  const [open, setOpen] = useState(false);
+  const [format, setFormat] = useState("hex");
+  const [draft, setDraft] = useState(null);
+  const parsed = parseColor(value);
+  const [hsb, setHsb] = useState(() => rgbToHsb(parsed || { r: 255, g: 255, b: 255, a: 1 }));
+  const emitted = useRef(value);
+
+  // Follow outside changes (undo, reset) without disturbing the hue while the
+  // merchant drags through greys, where hue can't be derived from the color.
+  useEffect(() => {
+    if (value === emitted.current) return;
+    emitted.current = value;
+    const next = parseColor(value);
+    if (next) setHsb(rgbToHsb(next));
+  }, [value]);
+
+  const emit = (hex) => {
+    emitted.current = hex;
+    onChange(hex);
+  };
+
+  const commit = (text) => {
+    if (text === null) return;
+    if (!text.trim()) {
+      setDraft(null);
+      emit("");
+      return;
+    }
+    const next = parseColor(text);
+    if (!next) return;
+    setDraft(null);
+    setHsb(rgbToHsb(next));
+    emit(toHex(next));
+  };
+
+  const shown = draft ?? (parsed ? formatColor(parsed, format) : value || "");
+  const invalid = draft !== null && draft.trim() !== "" && !parseColor(draft);
+
+  const activator = (
+    <Button
+      icon={<Swatch color={parsed ? toHex(parsed) : ""} />}
+      accessibilityLabel={`Pick ${label.toLowerCase()} color`}
+      onClick={() => setOpen((current) => !current)}
+    />
+  );
+
   return (
     <TextField
       label={label}
-      value={value || ""}
-      onChange={onChange}
+      value={shown}
+      onChange={setDraft}
+      onBlur={() => commit(draft)}
       autoComplete="off"
       monospaced
       placeholder={placeholder}
-      helpText={helpText}
+      helpText={helpText || (parsed && parsed.a < 1 ? `${Math.round(parsed.a * 100)}% opacity` : undefined)}
       clearButton={Boolean(placeholder)}
-      onClearButtonClick={() => onChange("")}
-      error={value && !HEX_PATTERN.test(value) ? "Use a hex color like #1a2b3c." : undefined}
+      onClearButtonClick={() => {
+        setDraft(null);
+        emit("");
+      }}
+      error={invalid ? "Use a color like #1a2b3c, rgba(26, 43, 60, 0.5) or hsl(210, 40%, 17%)." : undefined}
       connectedLeft={
-        <div style={{ position: "relative", width: 36, height: 36 }}>
-          <div
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              margin: 2,
-              borderRadius: 6,
-              border: "1px solid #c9cccf",
-              background: swatchColor,
-              pointerEvents: "none",
-            }}
-          />
-          <input
-            type="color"
-            value={swatchColor.length === 4 ? `#${[...swatchColor.slice(1)].map((c) => c + c).join("")}` : swatchColor}
-            onChange={(event) => onChange(event.target.value)}
-            aria-label={`${label} color picker`}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", border: 0, padding: 0 }}
-          />
-        </div>
+        <Popover active={open} activator={activator} onClose={() => setOpen(false)} preferredAlignment="left" sectioned>
+          <div className="fb-colorpop">
+            <ColorPicker
+              allowAlpha
+              fullWidth
+              color={hsb}
+              onChange={(next) => {
+                setHsb(next);
+                setDraft(null);
+                emit(toHex(hsbToRgb(next)));
+              }}
+            />
+            <div className="fb-colorpop__row">
+              <div style={{ width: 92 }}>
+                <Select label="Format" labelHidden options={FORMATS} value={format} onChange={setFormat} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TextField
+                  label={`${label} value`}
+                  labelHidden
+                  value={shown}
+                  onChange={setDraft}
+                  onBlur={() => commit(draft)}
+                  autoComplete="off"
+                  monospaced
+                  error={invalid}
+                />
+              </div>
+            </div>
+            <div className="fb-colorpop__swatches" role="group" aria-label="Preset colors">
+              <Tooltip content="Transparent">
+                <Button
+                  size="micro"
+                  variant="tertiary"
+                  icon={<Swatch color="#00000000" size={18} />}
+                  accessibilityLabel="Transparent"
+                  pressed={parsed?.a === 0}
+                  onClick={() => commit("transparent")}
+                />
+              </Tooltip>
+              {PRESET_COLORS.map((preset) => (
+                <Tooltip key={preset} content={preset}>
+                  <Button
+                    size="micro"
+                    variant="tertiary"
+                    icon={<Swatch color={preset} size={18} />}
+                    accessibilityLabel={preset}
+                    pressed={parsed ? toHex(parsed) === preset : false}
+                    onClick={() => commit(preset)}
+                  />
+                </Tooltip>
+              ))}
+            </div>
+            <div className="fb-colorpop__actions">
+              <Button size="slim" onClick={() => commit("transparent")}>
+                Make transparent
+              </Button>
+              {placeholder && (
+                <Button size="slim" variant="plain" onClick={() => commit("")}>
+                  Use default
+                </Button>
+              )}
+            </div>
+          </div>
+        </Popover>
       }
     />
   );

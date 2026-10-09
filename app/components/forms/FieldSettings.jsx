@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, RangeSlider, Select, TextField } from "@shopify/polaris";
+import { Button, ButtonGroup, RangeSlider, Select, TextField } from "@shopify/polaris";
 import { ChevronDownIcon, ChevronRightIcon, DeleteIcon, PlusIcon, XIcon } from "@shopify/polaris-icons";
 import {
   getFieldType,
@@ -43,13 +43,20 @@ export function Switch({ checked, onChange, label, description, disabled }) {
 
 export function Section({ title, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
-  const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
   return (
     <div className="fb-section">
-      <button type="button" className="fb-section__toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Chevron width={18} height={18} fill="currentColor" aria-hidden="true" />
-        {title}
-      </button>
+      <div className="fb-section__toggle">
+        <Button
+          variant="tertiary"
+          icon={open ? ChevronDownIcon : ChevronRightIcon}
+          textAlign="left"
+          fullWidth
+          ariaExpanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {title}
+        </Button>
+      </div>
       {open && <div className="fb-section__body">{children}</div>}
     </div>
   );
@@ -85,9 +92,7 @@ export default function FieldSettings({
     <>
       <div className="fb-panel__header">
         <h2 className="fb-panel__title">Field settings</h2>
-        <button type="button" className="fb-icon-btn" aria-label="Close field settings" onClick={onClose}>
-          <XIcon width={20} height={20} fill="currentColor" />
-        </button>
+        <Button icon={XIcon} variant="tertiary" accessibilityLabel="Close field settings" onClick={onClose} />
       </div>
 
       <div className="fb-panel__stack">
@@ -189,21 +194,20 @@ export default function FieldSettings({
         {twoColumn && !isSubmit && (
           <div>
             <span className="fb-field-label" id={`column-${field.id}`}>Column</span>
-            <div className="fb-seg" role="group" aria-labelledby={`column-${field.id}`}>
+            <ButtonGroup variant="segmented" fullWidth>
               {[
                 ["side", "Side column"],
                 ["main", "Form column"],
               ].map(([value, label]) => (
-                <button
+                <Button
                   key={value}
-                  type="button"
-                  aria-pressed={(field.column === "side" ? "side" : "main") === value}
+                  pressed={(field.column === "side" ? "side" : "main") === value}
                   onClick={() => onUpdate({ column: value })}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
-            </div>
+            </ButtonGroup>
             <p className="fb-help">You can also drag fields between the two columns.</p>
           </div>
         )}
@@ -211,18 +215,17 @@ export default function FieldSettings({
         {field.type !== "hiddenField" && (
           <div>
             <span className="fb-field-label" id={`width-${field.id}`}>Field width</span>
-            <div className="fb-seg" role="group" aria-labelledby={`width-${field.id}`}>
+            <ButtonGroup variant="segmented" fullWidth>
               {WIDTH_OPTIONS.map((option) => (
-                <button
+                <Button
                   key={option.value}
-                  type="button"
-                  aria-pressed={field.width === option.value}
+                  pressed={field.width === option.value}
                   onClick={() => onUpdate({ width: option.value })}
                 >
                   {option.label}
-                </button>
+                </Button>
               ))}
-            </div>
+            </ButtonGroup>
             <p className="fb-help">Fields sit side by side on wide screens and stack on phones.</p>
           </div>
         )}
@@ -632,15 +635,14 @@ function OptionsEditor({ field, onChange }) {
                 }}
               />
             </div>
-            <button
-              type="button"
-              className="fb-icon-btn fb-icon-btn--critical"
-              aria-label={`Remove option ${index + 1}`}
+            <Button
+              icon={DeleteIcon}
+              variant="tertiary"
+              tone="critical"
+              accessibilityLabel={`Remove option ${index + 1}`}
               disabled={options.length <= 1}
               onClick={() => onChange(options.filter((_, entryIndex) => entryIndex !== index))}
-            >
-              <DeleteIcon width={18} height={18} fill="currentColor" />
-            </button>
+            />
           </div>
         ))}
         <div>
