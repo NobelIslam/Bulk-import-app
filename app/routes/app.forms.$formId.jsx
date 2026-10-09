@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useFetcher, useLoaderData, useRouteError } from "react-router";
+import { Link, useBlocker, useFetcher, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
@@ -86,7 +86,6 @@ function collisionDetection(args) {
   }
   return closestCenter(args);
 }
-const AUTOSAVE_DELAY = 1500;
 const TABS = [
   { id: "build", label: "Build" },
   { id: "design", label: "Design" },
@@ -208,13 +207,6 @@ export default function FormBuilder() {
     [fetcher],
   );
 
-  // Autosave: every edit lands as a draft after a short pause.
-  useEffect(() => {
-    if (!dirty) return undefined;
-    const timer = setTimeout(() => submitDoc("save", doc), AUTOSAVE_DELAY);
-    return () => clearTimeout(timer);
-  }, [doc, dirty, submitDoc]);
-
   useEffect(() => {
     const wasBusy = prevFetcherState.current !== "idle";
     prevFetcherState.current = fetcher.state;
@@ -232,10 +224,16 @@ export default function FormBuilder() {
     if (sentDocRef.current) markSaved(sentDocRef.current);
     setSaveState("saved");
     setSavedAt(new Date());
-    if (result.intent !== "save") shopify.toast.show(result.message);
+    shopify.toast.show(result.message);
   }, [fetcher.state, fetcher.data, shopify, markSaved]);
 
-  // Warn before leaving with edits the autosave hasn't sent yet.
+  // Changes are only stored when the merchant saves, so leaving with unsaved
+  // edits asks first: the blocker covers in-app links, beforeunload covers
+  // reloads and closing the tab.
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname,
+  );
+
   useEffect(() => {
     if (!dirty) return undefined;
     const handler = (event) => {
@@ -428,7 +426,7 @@ export default function FormBuilder() {
               <Button
                 onClick={() => submitDoc("save", doc)}
                 disabled={!dirty || (pendingIntent !== null && pendingIntent !== "save")}
-                loading={pendingIntent === "save" && dirty}
+                loading={pendingIntent === "save"}
               >
                 Save
               </Button>
@@ -597,6 +595,18 @@ export default function FormBuilder() {
       </div>
 
       <DragOverlay>{activeDrag ? <DragOverlayCard drag={activeDrag} fields={fields} /> : null}</DragOverlay>
+
+      <Modal
+        open={blocker.state === "blocked"}
+        onClose={() => blocker.reset?.()}
+        title="Leave without saving?"
+        primaryAction={{ content: "Leave without saving", destructive: true, onAction: () => blocker.proceed?.() }}
+        secondaryActions={[{ content: "Stay on this page", onAction: () => blocker.reset?.() }]}
+      >
+        <Modal.Section>
+          <p>You have unsaved changes to this form. If you leave now, they&apos;ll be lost.</p>
+        </Modal.Section>
+      </Modal>
 
       <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={`Preview: ${doc.name}`} size="large">
         <Modal.Section>
