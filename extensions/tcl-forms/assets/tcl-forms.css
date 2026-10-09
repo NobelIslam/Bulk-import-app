@@ -1,1 +1,4 @@
-.tcl-form-host{display:block;width:100%;min-height:40px}.tcl-form-host .tclf-card{margin-left:auto;margin-right:auto}.tcl-form-empty{padding:16px;border:1px dashed #c9cccf;border-radius:8px;color:#616161;font-size:14px;text-align:center}
+.tcl-form-block{padding-top:var(--tcl-block-pt,0);padding-bottom:var(--tcl-block-pb,0)}
+[data-tcl-form]{display:block;width:100%;min-height:40px}
+[data-tcl-form] .tclf-card{margin-left:auto;margin-right:auto}
+.tcl-form-empty{padding:16px;border:1px dashed #c9cccf;border-radius:8px;color:#616161;font-size:14px;line-height:1.5;text-align:center}

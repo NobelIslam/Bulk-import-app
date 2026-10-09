@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getFieldType, inputFields, isConditionMet } from "./fields.js";
+import { isDateAllowed, isIsoDate } from "./content.js";
 
 // ─── Public ids ──────────────────────────────────────────────────────────────
 
@@ -180,6 +181,17 @@ export function validateSubmission(schema, rawData) {
     if (type === "phone" && !isValidPhone(value)) {
       errors[field.key] = sanitizeText(schema.settings?.errorInvalid, 300) || "Enter a valid phone number.";
       continue;
+    }
+    if (type === "date") {
+      if (!isIsoDate(value)) {
+        errors[field.key] = sanitizeText(schema.settings?.errorInvalid, 300) || "Choose a valid date.";
+        continue;
+      }
+      // One day of slack: a visitor's "today" can be a day behind the server's.
+      if (!isDateAllowed(value, field.dateOptions, { slackDays: 1 })) {
+        errors[field.key] = "This date isn't available. Choose another date.";
+        continue;
+      }
     }
     if (type === "number") {
       const num = parseNumber(value);

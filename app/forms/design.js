@@ -3,6 +3,8 @@
 // and rendered as CSS variables on a single form-scoped wrapper class, so nothing
 // can leak into or out of the merchant's theme.
 
+import { scopeCustomCss } from "./content.js";
+
 export const FONT_FAMILIES = [
   { value: "inherit", label: "Theme font", stack: "inherit" },
   { value: "system", label: "System", stack: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
@@ -140,7 +142,7 @@ function px(value, fallback) {
 
 // Emits the scoped stylesheet consumed by both the builder preview and the
 // storefront runtime. `publicId` scopes every selector.
-export function buildFormCss({ publicId, desktop, mobile, forceMobile = false }) {
+export function buildFormCss({ publicId, desktop, mobile, settings, forceMobile = false }) {
   const scope = `.tclf-form--${publicId}`;
   const vars = (style) => {
     const map = {
@@ -202,8 +204,54 @@ ${scope} .tclf-label { font-size: var(--tclf-label-size); color: var(--tclf-labe
 ${scope} .tclf-required { color: #d72c0d; margin-inline-start: 2px; }
 ${scope} .tclf-help { font-size: 12px; color: #6d7175; }
 ${scope} .tclf-error { font-size: 12px; color: #d72c0d; }
-${scope} .tclf-heading { font-size: var(--tclf-heading-size); font-weight: 600; margin: 0; }
-${scope} .tclf-paragraph { margin: 0; font-size: var(--tclf-input-size); color: var(--tclf-text); }
+${scope} .tclf-heading { font-size: var(--tclf-heading-size); font-weight: 600; margin: 0; line-height: 1.25; color: inherit; }
+${scope} .tclf-paragraph { margin: 0; font-size: var(--tclf-input-size); color: inherit; line-height: 1.5; }
+${scope} .tclf-rich p, ${scope} .tclf-rich ul, ${scope} .tclf-rich ol { margin: 0 0 0.6em; }
+${scope} .tclf-rich > :last-child { margin-bottom: 0; }
+${scope} .tclf-rich ul, ${scope} .tclf-rich ol { padding-inline-start: 1.4em; }
+${scope} .tclf-rich a { color: var(--tclf-accent); text-decoration: underline; }
+${scope} .tclf-col[data-block-bg] { border-radius: var(--tclf-radius); }
+${scope} .tclf-col[data-block-bg]:not([data-has-padding]) { padding: 12px 16px; }
+${scope} .tclf-image { display: flex; width: 100%; }
+${scope} .tclf-image img { display: block; max-width: 100%; height: auto; }
+${scope} .tclf-image-empty { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 120px; border: 1px dashed var(--tclf-border); border-radius: var(--tclf-radius); color: #8a8a8a; font-size: 13px; background: #fafafa; }
+${scope} .tclf-layout { display: block; }
+${scope}.tclf-card[data-layout="twoColumn"] { padding: 0; overflow: hidden; }
+${scope}[data-layout="twoColumn"] .tclf-layout { display: grid; grid-template-columns: var(--tclf-side-width, 45%) minmax(0, 1fr); align-items: stretch; }
+${scope}[data-layout="twoColumn"][data-side-position="right"] .tclf-layout { grid-template-columns: minmax(0, 1fr) var(--tclf-side-width, 45%); }
+${scope}[data-layout="twoColumn"][data-side-position="right"] .tclf-side { order: 2; }
+${scope}[data-layout="twoColumn"] .tclf-main { padding: var(--tclf-padding); min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+${scope} .tclf-side { position: relative; display: flex; flex-direction: column; min-height: 260px; padding: var(--tclf-padding); overflow: hidden; }
+${scope} .tclf-side[data-valign="top"] { justify-content: flex-start; }
+${scope} .tclf-side[data-valign="center"] { justify-content: center; }
+${scope} .tclf-side[data-valign="bottom"] { justify-content: flex-end; }
+${scope} .tclf-side__img { display: block; width: 100%; }
+${scope} .tclf-side[data-fit="cover"] .tclf-side__img { position: absolute; inset: 0; height: 100%; object-fit: cover; }
+${scope} .tclf-side[data-fit="contain"] .tclf-side__img { height: auto; max-height: 100%; object-fit: contain; margin-bottom: 16px; }
+${scope} .tclf-side__content { position: relative; z-index: 1; }
+${scope} .tclf-side__content:empty { display: none; }
+${scope} .tclf-date { position: relative; width: 100%; }
+${scope} .tclf-date .tclf-date__input { cursor: pointer; padding-right: 40px; }
+${scope} .tclf-date__icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; pointer-events: none; color: #6d7175; }
+${scope} .tclf-cal { position: absolute; z-index: 50; top: calc(100% + 6px); left: 0; width: 300px; max-width: calc(100vw - 32px); padding: 14px; background: #ffffff; color: #202223; border: 1px solid #e1e3e5; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.16); font-size: 14px; text-align: left; }
+${scope} .tclf-cal[hidden] { display: none; }
+${scope} .tclf-cal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+${scope} .tclf-cal__title { font-weight: 600; font-size: 15px; }
+${scope} .tclf-cal__nav { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; }
+${scope} .tclf-cal__nav:hover:not(:disabled) { background: #f1f2f4; }
+${scope} .tclf-cal__nav:disabled { opacity: 0.3; cursor: default; }
+${scope} .tclf-cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+${scope} .tclf-cal__dow { text-align: center; font-size: 11px; font-weight: 600; color: #8a8a8a; text-transform: uppercase; padding: 4px 0; }
+${scope} .tclf-cal__day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer; padding: 0; min-height: 0; width: 100%; }
+${scope} .tclf-cal__day:hover:not(:disabled) { background: #f1f2f4; }
+${scope} .tclf-cal__day:focus-visible { outline: 2px solid var(--tclf-accent); outline-offset: 1px; }
+${scope} .tclf-cal__day[data-outside] { color: #b5b5b5; }
+${scope} .tclf-cal__day[data-today] { box-shadow: inset 0 0 0 1px var(--tclf-accent); }
+${scope} .tclf-cal__day[aria-selected="true"] { background: var(--tclf-accent); color: #ffffff; font-weight: 600; }
+${scope} .tclf-cal__day:disabled { color: #d0d0d0; cursor: not-allowed; text-decoration: line-through; }
+${scope} .tclf-cal__foot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f2f4; }
+${scope} .tclf-cal__link { border: 0; background: transparent; color: var(--tclf-accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+${scope} .tclf-cal__link:hover { background: #f1f2f4; }
 ${scope} input[type="text"], ${scope} input[type="email"], ${scope} input[type="tel"],
 ${scope} input[type="number"], ${scope} input[type="date"], ${scope} select,
 ${scope} textarea, ${scope} input[type="file"] {
@@ -255,15 +303,41 @@ ${scope}.tclf-align-center .tclf-grid { justify-content: center; }
 @media (max-width: ${BREAKPOINT_MOBILE}px) {
 ${scope} {${vars(mobileStyle)}}
 ${scope} .tclf-col[data-width] { flex: 0 0 100%; max-width: 100%; }
+${mobileLayout(scope)}
 }
 `;
 
   // The builder's mobile preview is narrower than the breakpoint without the
   // browser being, so it applies the mobile rules unconditionally.
   if (forceMobile) {
-    return `${scope} {${vars(mobileStyle)}}${desktopCss}
-${scope} .tclf-col[data-width] { flex: 0 0 100%; max-width: 100%; }`;
+    return `${scope} {${vars(mobileStyle)}}${sideCss(scope, settings)}${desktopCss}
+${scope} .tclf-col[data-width] { flex: 0 0 100%; max-width: 100%; }
+${mobileLayout(scope)}
+${customCss(scope, settings)}`;
   }
 
-  return `${scope} {${vars(resolveStyle(desktop, mobile, "desktop"))}}${desktopCss}${mobileCss}`;
+  return `${scope} {${vars(resolveStyle(desktop, mobile, "desktop"))}}${sideCss(scope, settings)}${desktopCss}${mobileCss}${customCss(scope, settings)}`;
+}
+
+// Two columns stack on phones, side panel first.
+function mobileLayout(scope) {
+  return `${scope}[data-layout="twoColumn"][data-side-position] .tclf-layout { grid-template-columns: 1fr; }
+${scope}[data-layout="twoColumn"][data-side-position] .tclf-side { order: 0; min-height: 200px; }`;
+}
+
+function sideCss(scope, settings) {
+  const side = settings?.sidePanel;
+  if (settings?.layout !== "twoColumn" || !side) return "";
+  const width = Math.min(65, Math.max(25, Number(side.width) || 45));
+  const panel = [
+    `background:${side.backgroundColor || "#f6f6f7"};`,
+    side.textColor ? `color:${side.textColor};` : "",
+    `text-align:${side.textAlign || "left"};`,
+  ].join("");
+  return `\n${scope} {--tclf-side-width:${width}%;}\n${scope} .tclf-side {${panel}}\n`;
+}
+
+// Merchant CSS is appended last so it wins over the generated rules.
+function customCss(scope, settings) {
+  return settings?.customCss ? `\n/* Custom CSS */\n${scopeCustomCss(settings.customCss, scope)}` : "";
 }

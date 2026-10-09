@@ -1,10 +1,50 @@
-{% assign tcl_form_id = block.settings.form_id | strip %}
-{% if tcl_form_id != blank %}
-  <div class="tcl-form-host" data-tcl-form="{{ tcl_form_id }}" data-tcl-form-mode="inline" {{ block.shopify_attributes }}></div>
-{% else %}
-  <div class="tcl-form-empty" {{ block.shopify_attributes }}>Select a form in the block settings.</div>
-{% endif %}
+{%- liquid
+  assign tcl_form_id = block.settings.form_id | default: '' | strip
+-%}
+<div class="tcl-form-block" style="--tcl-block-pt: {{ block.settings.padding_top }}px; --tcl-block-pb: {{ block.settings.padding_bottom }}px;" {{ block.shopify_attributes }}>
+  {%- if tcl_form_id != blank -%}
+    <div class="tcl-form-host" data-tcl-form="{{ tcl_form_id | escape }}" data-tcl-form-mode="inline"></div>
+  {%- elsif request.design_mode -%}
+    <div class="tcl-form-empty">
+      <strong>TCL Form</strong><br>
+      Paste a form ID into this block's settings. You'll find it on the form's Publish tab in the app.
+    </div>
+  {%- endif -%}
+</div>
 
 {% schema %}
-{"name":"TCL Form","target":"section","javascript":"tcl-forms.js","stylesheet":"tcl-forms.css","settings":[{"type":"text","id":"form_id","label":"Form public ID","info":"Copy the public ID from the Forms page in the app."}]}
+{
+  "name": "TCL Form",
+  "target": "section",
+  "javascript": "tcl-forms.js",
+  "stylesheet": "tcl-forms.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "form_id",
+      "label": "Form ID",
+      "info": "Copy the form ID from the Publish tab of the form in the TCL Forms app."
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Top padding",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Bottom padding",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    }
+  ]
+}
 {% endschema %}

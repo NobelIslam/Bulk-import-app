@@ -1,18 +1,22 @@
 import { useState } from "react";
-import { Button, Select, TextField } from "@shopify/polaris";
+import { Button, RangeSlider, Select, TextField } from "@shopify/polaris";
 import { ChevronDownIcon, ChevronRightIcon, DeleteIcon, PlusIcon, XIcon } from "@shopify/polaris-icons";
 import {
   getFieldType,
   PATTERN_FIELD_TYPES,
   presetForValidation,
+  RICH_TEXT_TYPES,
   SPACING_SIDES,
+  STYLED_BLOCK_TYPES,
   VALIDATION_PRESETS,
   WIDTH_OPTIONS,
 } from "../../forms/fields";
+import { DATE_FORMATS, richTextToPlain } from "../../forms/content";
 import FieldIcon from "./FieldIcon";
+import { AlignmentPicker, ColorField, ImagePicker, RichTextEditor } from "./ContentControls";
 
-const NO_PLACEHOLDER = ["heading", "paragraph", "divider", "submitButton", "checkbox", "consentCheckbox", "radio", "multiCheckbox", "hiddenField", "fileUpload", "date"];
-const NO_LABEL = ["divider"];
+const NO_PLACEHOLDER = ["heading", "paragraph", "divider", "submitButton", "checkbox", "consentCheckbox", "radio", "multiCheckbox", "hiddenField", "fileUpload", "image"];
+const NO_LABEL = ["divider", "image", ...RICH_TEXT_TYPES];
 const LABEL_IS_TEXT = { heading: "Heading text", paragraph: "Paragraph text", submitButton: "Button text" };
 const DEFAULT_VALUE_TYPES = ["shortText", "longText", "email", "phone", "number", "date", "dropdown", "radio", "hiddenField"];
 const LENGTH_TYPES = ["shortText", "longText"];
@@ -58,7 +62,16 @@ function numberOrNull(value) {
 }
 
 // Right panel: settings for the field selected on the canvas.
-export default function FieldSettings({ field, otherFields, onUpdate, onUpdateSection, onRemove, onDuplicate, onClose }) {
+export default function FieldSettings({
+  field,
+  otherFields,
+  onUpdate,
+  onUpdateSection,
+  onRemove,
+  onDuplicate,
+  onClose,
+  onError,
+}) {
   const meta = getFieldType(field.type);
   const isLayout = meta?.submissionKey === false;
   const isSubmit = field.type === "submitButton";
@@ -93,8 +106,49 @@ export default function FieldSettings({ field, otherFields, onUpdate, onUpdateSe
             value={field.label}
             onChange={(label) => onUpdate({ label })}
             autoComplete="off"
-            multiline={field.type === "paragraph" ? 3 : undefined}
           />
+        )}
+
+        {RICH_TEXT_TYPES.includes(field.type) && (
+          <RichTextEditor
+            label={LABEL_IS_TEXT[field.type]}
+            value={field.richText}
+            allowLists={field.type === "paragraph"}
+            minHeight={field.type === "heading" ? 48 : 110}
+            onChange={(richText) => onUpdate({ richText, label: richTextToPlain(richText).slice(0, 300) })}
+          />
+        )}
+
+        {field.type === "heading" && (
+          <Select
+            label="Heading size"
+            options={[
+              { value: "h2", label: "Large (H2)" },
+              { value: "h3", label: "Medium (H3)" },
+              { value: "h4", label: "Small (H4)" },
+            ]}
+            value={field.headingLevel || "h3"}
+            onChange={(headingLevel) => onUpdate({ headingLevel })}
+          />
+        )}
+
+        {field.type === "image" && (
+          <ImageSettings
+            image={field.image || {}}
+            onChange={(patch) => onUpdateSection("image", patch)}
+            onError={onError}
+          />
+        )}
+
+        {STYLED_BLOCK_TYPES.includes(field.type) && (
+          <BlockStyleSettings
+            field={field}
+            onChange={(patch) => onUpdateSection("blockStyle", patch)}
+          />
+        )}
+
+        {field.type === "date" && (
+          <DateSettings options={field.dateOptions || {}} onChange={(patch) => onUpdateSection("dateOptions", patch)} />
         )}
 
         {!NO_PLACEHOLDER.includes(field.type) && (
@@ -106,7 +160,7 @@ export default function FieldSettings({ field, otherFields, onUpdate, onUpdateSe
           />
         )}
 
-        {!["divider", "hiddenField", "submitButton"].includes(field.type) && (
+        {!["divider", "hiddenField", "submitButton", "image"].includes(field.type) && (
           <TextField
             label="Help text"
             value={field.helpText}
@@ -362,6 +416,133 @@ export default function FieldSettings({ field, otherFields, onUpdate, onUpdateSe
       </div>
       {isSubmit && <p className="fb-help">Every form needs exactly one submit button.</p>}
     </>
+  );
+}
+
+function BlockStyleSettings({ field, onChange }) {
+  const block = field.blockStyle || {};
+  const isImage = field.type === "image";
+  return (
+    <div className="fb-subcard">
+      <span className="fb-subcard__title">Block style</span>
+      <ColorField
+        label="Background"
+        value={block.backgroundColor}
+        placeholder="None"
+        onChange={(backgroundColor) => onChange({ backgroundColor })}
+      />
+      {!isImage && (
+        <ColorField
+          label="Text color"
+          value={block.textColor}
+          placeholder="Form default"
+          onChange={(textColor) => onChange({ textColor })}
+        />
+      )}
+      {!isImage && (
+        <AlignmentPicker label="Text alignment" value={block.align || "left"} onChange={(align) => onChange({ align })} />
+      )}
+    </div>
+  );
+}
+
+function ImageSettings({ image, onChange, onError }) {
+  return (
+    <>
+      <ImagePicker value={image.url} onChange={(url) => onChange({ url })} onError={onError} />
+      <TextField
+        label="Alt text"
+        value={image.alt || ""}
+        autoComplete="off"
+        helpText="Describes the image for screen readers."
+        onChange={(alt) => onChange({ alt })}
+      />
+      <TextField
+        label="Link (optional)"
+        value={image.link || ""}
+        autoComplete="off"
+        placeholder="https://"
+        onChange={(link) => onChange({ link })}
+      />
+      <RangeSlider
+        label="Image width"
+        min={10}
+        max={100}
+        value={Number(image.width) || 100}
+        output
+        suffix={<span style={{ minWidth: 40, display: "inline-block", textAlign: "right" }}>{image.width || 100}%</span>}
+        onChange={(width) => onChange({ width })}
+      />
+      <RangeSlider
+        label="Corner radius"
+        min={0}
+        max={60}
+        value={Number(image.radius) || 0}
+        output
+        suffix={<span style={{ minWidth: 40, display: "inline-block", textAlign: "right" }}>{image.radius || 0}px</span>}
+        onChange={(radius) => onChange({ radius })}
+      />
+      <AlignmentPicker
+        label="Image alignment"
+        options={["left", "center", "right"]}
+        value={image.align || "center"}
+        onChange={(align) => onChange({ align })}
+      />
+    </>
+  );
+}
+
+function DateSettings({ options, onChange }) {
+  return (
+    <div className="fb-subcard">
+      <span className="fb-subcard__title">Date picker</span>
+      <Select
+        label="Date format"
+        options={DATE_FORMATS}
+        value={options.format || "MM/DD/YYYY"}
+        onChange={(format) => onChange({ format })}
+        helpText="How the date is shown to visitors. Submissions always store YYYY-MM-DD."
+      />
+      <Select
+        label="Week starts on"
+        options={[
+          { value: "0", label: "Sunday" },
+          { value: "1", label: "Monday" },
+        ]}
+        value={String(options.weekStart || 0)}
+        onChange={(value) => onChange({ weekStart: Number(value) })}
+      />
+      <Switch
+        label="Disable past dates"
+        checked={Boolean(options.disablePast)}
+        onChange={(disablePast) => onChange({ disablePast })}
+      />
+      <Switch
+        label="Disable weekends"
+        checked={Boolean(options.disableWeekends)}
+        onChange={(disableWeekends) => onChange({ disableWeekends })}
+      />
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <TextField
+            label="Earliest date"
+            type="date"
+            value={options.minDate || ""}
+            autoComplete="off"
+            onChange={(minDate) => onChange({ minDate })}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <TextField
+            label="Latest date"
+            type="date"
+            value={options.maxDate || ""}
+            autoComplete="off"
+            onChange={(maxDate) => onChange({ maxDate })}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -1,6 +1,17 @@
 // Field type registry. Shared by the builder (client) and the storefront renderer,
 // so it must stay free of Node/DOM-only imports.
 
+import {
+  defaultDateOptions,
+  normalizeDateOptions,
+  richTextToPlain,
+  sanitizeColor,
+  sanitizeCustomCss,
+  sanitizeImageUrl,
+  sanitizeRichText,
+  sanitizeUrl,
+} from "./content.js";
+
 // ─── Field categories ────────────────────────────────────────────────────────
 
 export const FIELD_GROUPS = [
@@ -167,6 +178,17 @@ export const FIELD_TYPES = [
     submissionKey: false,
   },
   {
+    type: "image",
+    label: "Image",
+    description: "Show a picture, logo or banner",
+    group: "layout",
+    width: "full",
+    control: "image",
+    icon: "image",
+    defaultLabel: "Image",
+    submissionKey: false,
+  },
+  {
     type: "divider",
     label: "Divider",
     description: "A horizontal line between sections",
@@ -208,6 +230,13 @@ export const FIELD_TYPE_MAP = FIELD_TYPES.reduce((acc, field) => {
 export function getFieldType(type) {
   return FIELD_TYPE_MAP[type] || null;
 }
+
+// Content blocks whose text is rich text with its own colors and alignment.
+export const RICH_TEXT_TYPES = ["heading", "paragraph"];
+export const STYLED_BLOCK_TYPES = ["heading", "paragraph", "image"];
+export const TEXT_ALIGNMENTS = ["left", "center", "right", "justify"];
+export const HEADING_LEVELS = ["h2", "h3", "h4"];
+export const IMAGE_FITS = ["cover", "contain"];
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
@@ -346,6 +375,59 @@ export function defaultField(type, takenKeys = []) {
     hideLabel: false,
     cssClass: "",
     spacing: defaultSpacing(),
+    ...typeDefaults(meta.type, label),
+  };
+}
+
+export function defaultBlockStyle() {
+  return { backgroundColor: "", textColor: "", align: "left" };
+}
+
+export function defaultImage() {
+  return { url: "", alt: "", link: "", width: 100, align: "center", radius: 0 };
+}
+
+// Properties only some field types carry.
+function typeDefaults(type, label) {
+  if (RICH_TEXT_TYPES.includes(type)) {
+    return {
+      richText: escapeForRich(label),
+      blockStyle: defaultBlockStyle(),
+      ...(type === "heading" ? { headingLevel: "h3" } : {}),
+    };
+  }
+  if (type === "image") return { image: defaultImage(), blockStyle: defaultBlockStyle() };
+  if (type === "date") return { dateOptions: defaultDateOptions() };
+  return {};
+}
+
+function escapeForRich(text) {
+  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function clampNumber(value, min, max, fallback) {
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.min(max, Math.max(min, Math.round(num))) : fallback;
+}
+
+export function normalizeBlockStyle(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  return {
+    backgroundColor: sanitizeColor(source.backgroundColor),
+    textColor: sanitizeColor(source.textColor),
+    align: TEXT_ALIGNMENTS.includes(source.align) ? source.align : "left",
+  };
+}
+
+export function normalizeImage(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  return {
+    url: sanitizeImageUrl(source.url),
+    alt: String(source.alt ?? "").slice(0, 300),
+    link: sanitizeUrl(source.link),
+    width: clampNumber(source.width, 10, 100, 100),
+    align: ["left", "center", "right"].includes(source.align) ? source.align : "center",
+    radius: clampNumber(source.radius, 0, 60, 0),
   };
 }
 
@@ -404,6 +486,58 @@ export function defaultFormSettings() {
     rateLimitPerMinute: 5,
     recaptchaEnabled: false,
     recaptchaSiteKey: "",
+    layout: "single",
+    sidePanel: defaultSidePanel(),
+    customCss: "",
+  };
+}
+
+export const FORM_LAYOUTS = [
+  { value: "single", label: "One column" },
+  { value: "twoColumn", label: "Two columns" },
+];
+
+// The second column of a two-column form: an image and/or rich text that sits
+// beside the fields.
+export function defaultSidePanel() {
+  return {
+    position: "left",
+    width: 45,
+    imageUrl: "",
+    imageAlt: "",
+    imageFit: "cover",
+    content: "",
+    backgroundColor: "",
+    textColor: "",
+    verticalAlign: "center",
+    textAlign: "left",
+  };
+}
+
+export function normalizeSidePanel(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  return {
+    position: source.position === "right" ? "right" : "left",
+    width: clampNumber(source.width, 25, 65, 45),
+    imageUrl: sanitizeImageUrl(source.imageUrl),
+    imageAlt: String(source.imageAlt ?? "").slice(0, 300),
+    imageFit: IMAGE_FITS.includes(source.imageFit) ? source.imageFit : "cover",
+    content: sanitizeRichText(source.content),
+    backgroundColor: sanitizeColor(source.backgroundColor),
+    textColor: sanitizeColor(source.textColor),
+    verticalAlign: ["top", "center", "bottom"].includes(source.verticalAlign) ? source.verticalAlign : "center",
+    textAlign: ["left", "center", "right"].includes(source.textAlign) ? source.textAlign : "left",
+  };
+}
+
+export function normalizeFormSettings(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const merged = { ...defaultFormSettings(), ...source };
+  return {
+    ...merged,
+    layout: FORM_LAYOUTS.some((entry) => entry.value === source.layout) ? source.layout : "single",
+    sidePanel: normalizeSidePanel(source.sidePanel),
+    customCss: sanitizeCustomCss(source.customCss),
   };
 }
 
@@ -482,6 +616,22 @@ export function normalizeSchema(raw) {
       next.hideLabel = Boolean(field.hideLabel);
       next.cssClass = sanitizeClassName(field.cssClass);
       next.spacing = normalizeSpacing(field.spacing);
+      if (RICH_TEXT_TYPES.includes(meta.type)) {
+        // Older forms only have a plain label; it becomes the rich text.
+        next.richText = sanitizeRichText(
+          typeof field.richText === "string" && field.richText.trim() ? field.richText : escapeForRich(next.label),
+        );
+        next.label = richTextToPlain(next.richText).slice(0, 300) || next.label;
+        next.blockStyle = normalizeBlockStyle(field.blockStyle);
+        if (meta.type === "heading") {
+          next.headingLevel = HEADING_LEVELS.includes(field.headingLevel) ? field.headingLevel : "h3";
+        }
+      }
+      if (meta.type === "image") {
+        next.image = normalizeImage(field.image);
+        next.blockStyle = normalizeBlockStyle(field.blockStyle);
+      }
+      if (meta.type === "date") next.dateOptions = normalizeDateOptions(field.dateOptions);
       return next;
     })
     .filter(Boolean);
@@ -491,8 +641,8 @@ export function normalizeSchema(raw) {
   }
 
   return {
-    version: SCHEMA_VERSION,
+    version: base.version,
     fields: normalizedFields,
-    settings: { ...base.settings, ...(typeof raw?.settings === "object" && raw.settings ? raw.settings : {}) },
+    settings: normalizeFormSettings(raw?.settings),
   };
 }

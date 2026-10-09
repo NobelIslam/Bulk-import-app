@@ -1,5 +1,26 @@
-<div data-tcl-forms-embed data-tcl-form-trigger="all" {{ block.shopify_attributes }}></div>
+{%- comment -%}
+  Loads the TCL Forms script on every page, so a form short code
+  (<div data-tcl-form="FORM_ID"></div>) works anywhere: page content, blog
+  posts, product descriptions or theme files.
+{%- endcomment -%}
+{%- if block.settings.enabled -%}
+  <div data-tcl-forms-embed hidden {{ block.shopify_attributes }}></div>
+{%- endif -%}
 
 {% schema %}
-{"name":"TCL Forms popup","target":"body","javascript":"tcl-forms.js","stylesheet":"tcl-forms.css","settings":[{"type":"checkbox","id":"enabled","label":"Enable TCL Forms popup","default":true}]}
+{
+  "name": "TCL Forms Embed",
+  "target": "body",
+  "javascript": "tcl-forms.js",
+  "stylesheet": "tcl-forms.css",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enabled",
+      "label": "Load forms from short codes",
+      "default": true,
+      "info": "Lets you paste <div data-tcl-form=\"FORM_ID\"></div> anywhere in your store."
+    }
+  ]
+}
 {% endschema %}

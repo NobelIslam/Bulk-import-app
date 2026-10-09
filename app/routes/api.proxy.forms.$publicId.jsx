@@ -4,6 +4,7 @@ import { getPublishedForm, createSubmission, countSubmissionsThisMonth } from ".
 import { checkSubmissionLimit } from "../config/limits.server";
 import { isHoneypotTripped, validateSubmission } from "../forms/schema.server";
 import { buildFormCss } from "../forms/design";
+import { normalizeSchema } from "../forms/fields";
 
 function json(data, init = {}) {
   return new Response(JSON.stringify(data), {
@@ -47,9 +48,12 @@ export async function loader({ request, params }) {
   const form = await getPublishedForm(shop, params.publicId);
   if (!form) return json({ error: "Form not found." }, { status: 404 });
 
+  // Re-normalizing fills defaults for forms saved before newer options existed
+  // and re-sanitizes rich text before it reaches the storefront.
+  const normalized = normalizeSchema(form.schema);
   const schema = {
-    ...form.schema,
-    fields: (form.schema?.fields || []).filter((field) => field.visible !== false),
+    ...normalized,
+    fields: normalized.fields.filter((field) => field.visible !== false),
   };
 
   return json({
@@ -62,7 +66,12 @@ export async function loader({ request, params }) {
       placement: form.placement,
     },
     // Same generator the builder preview uses, so the storefront matches it exactly.
-    css: buildFormCss({ publicId: form.publicId, desktop: form.desktopStyle, mobile: form.mobileStyle }),
+    css: buildFormCss({
+      publicId: form.publicId,
+      desktop: form.desktopStyle,
+      mobile: form.mobileStyle,
+      settings: schema.settings,
+    }),
   });
 }
 

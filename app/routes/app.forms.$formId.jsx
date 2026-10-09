@@ -14,15 +14,16 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Banner, Button, Modal } from "@shopify/polaris";
 import {
   ChevronRightIcon,
   ClipboardIcon,
+  CodeIcon,
   DeleteIcon,
   DesktopIcon,
   DragDropIcon,
@@ -34,13 +35,14 @@ import {
   MobileIcon,
   RedoIcon,
   SettingsIcon,
+  ThemeEditIcon,
   UndoIcon,
   ViewIcon,
 } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import { getForm, getFormSubmissionCounts, setFormStatus, updateForm } from "../forms/forms.server";
 import { defaultField, getFieldType, normalizeSchema, WIDTH_OPTIONS } from "../forms/fields";
-import { buildFormCss, DEFAULT_DESKTOP_STYLE, resolveStyle } from "../forms/design";
+import { DEFAULT_DESKTOP_STYLE, resolveStyle } from "../forms/design";
 import useBuilderHistory, {
   duplicateField,
   insertField,
@@ -53,7 +55,7 @@ import useBuilderHistory, {
   updateFieldSettings,
 } from "../forms/builder-state";
 import FieldPalette from "../components/forms/FieldPalette";
-import FormPreview, { FormFieldPreview } from "../components/forms/FormPreview";
+import FormPreview, { columnProps, FormFieldPreview, FormShell } from "../components/forms/FormPreview";
 import FieldSettings from "../components/forms/FieldSettings";
 import FormSettings from "../components/forms/FormSettings";
 import DesignSettings from "../components/forms/DesignSettings";
@@ -240,6 +242,19 @@ export default function FormBuilder() {
   };
 
   const toggleVisible = (field) => update((current) => updateField(current, field.id, { visible: field.visible === false }));
+
+  const showError = useCallback((message) => shopify.toast.show(message, { isError: true }), [shopify]);
+
+  // Two columns need room: widen a narrow form so the fields aren't squeezed.
+  const changeLayout = (layout) =>
+    update((current) => {
+      const next = setSchemaSettings(current, { layout });
+      const width = Number(current.desktopStyle?.formWidth) || DEFAULT_DESKTOP_STYLE.formWidth;
+      if (layout === "twoColumn" && width < 900) {
+        return { ...next, desktopStyle: { ...next.desktopStyle, formWidth: 960 } };
+      }
+      return next;
+    });
 
   // ─── Keyboard shortcuts ────────────────────────────────────────────────────
 
@@ -428,6 +443,9 @@ export default function FormBuilder() {
                 publicId={form.publicId}
                 doc={doc}
                 fields={fields}
+                viewport={viewport}
+                onViewport={setViewport}
+                onEditLayout={() => setTab("settings")}
                 selectedFieldId={selectedFieldId}
                 onSelect={(fieldId) => select(fieldId)}
                 onDuplicate={(fieldId) => update((current) => duplicateField(current, fieldId))}
@@ -451,7 +469,11 @@ export default function FormBuilder() {
               <div className="fb-card fb-card--flush">
                 <FormSettings
                   settings={doc.schema.settings}
-                  updateSetting={(patch) => update((current) => setSchemaSettings(current, patch), "form-settings")}
+                  updateSetting={(patch) =>
+                    update((current) => setSchemaSettings(current, patch), `form-settings-${Object.keys(patch).join("-")}`)
+                  }
+                  onLayoutChange={changeLayout}
+                  onError={showError}
                 />
               </div>
             )}
@@ -465,7 +487,7 @@ export default function FormBuilder() {
                 busy={pendingIntent !== null}
                 onPublish={() => submitDoc("publish", doc)}
                 onUnpublish={() => submitDoc("unpublish", doc)}
-                onCopied={() => shopify.toast.show("Form ID copied")}
+                onCopied={(what) => shopify.toast.show(`${what} copied`)}
               />
             )}
           </div>
@@ -490,6 +512,7 @@ export default function FormBuilder() {
                 onRemove={() => removeSelected(selectedFieldId)}
                 onDuplicate={() => update((current) => duplicateField(current, selectedFieldId))}
                 onClose={() => select(null)}
+                onError={showError}
               />
             ) : (
               <>
@@ -672,12 +695,27 @@ function PreviewToolbar({ viewport, onViewport, title }) {
 }
 
 // ─── Canvas ──────────────────────────────────────────────────────────────────
+// The Build tab renders the form through the same FormShell as the Design
+// preview and the storefront, so every style, width, layout and custom CSS
+// change is visible here immediately. Builder chrome (outline, toolbar) sits
+// on top of each field without changing its layout.
 
-function Canvas({ publicId, doc, fields, selectedFieldId, onSelect, onDuplicate, onRemove, onToggleVisible }) {
+function Canvas({
+  publicId,
+  doc,
+  fields,
+  viewport,
+  onViewport,
+  onEditLayout,
+  selectedFieldId,
+  onSelect,
+  onDuplicate,
+  onRemove,
+  onToggleVisible,
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: DROP_ZONE_ID });
-  const scope = `${publicId}-canvas`;
-  const css = buildFormCss({ publicId: scope, desktop: doc.desktopStyle, mobile: doc.mobileStyle });
-  const style = resolveStyle(doc.desktopStyle, doc.mobileStyle, "desktop");
+  const style = resolveStyle(doc.desktopStyle, doc.mobileStyle, viewport);
+  const twoColumn = doc.schema.settings?.layout === "twoColumn";
 
   return (
     <div className="fb-card">
@@ -691,30 +729,52 @@ function Canvas({ publicId, doc, fields, selectedFieldId, onSelect, onDuplicate,
         </span>
       </div>
 
-      <div
-        className={`tclf-form--${scope}`}
-        data-input-style={style.inputStyle}
-        style={{ maxWidth: "none", textAlign: "left" }}
-      >
-        <style dangerouslySetInnerHTML={{ __html: css }} />
-        <SortableContext items={fields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
-          <div className="fb-list" style={{ flexDirection: "column", flexWrap: "nowrap" }}>
-            {fields.map((field) => (
-              <CanvasRow
-                key={field.id}
-                field={field}
-                fields={fields}
-                submitText={doc.schema.settings?.submitText}
-                buttonStyle={style.buttonStyle}
-                selected={selectedFieldId === field.id}
-                onSelect={() => onSelect(field.id)}
-                onDuplicate={() => onDuplicate(field.id)}
-                onRemove={() => onRemove(field.id)}
-                onToggleVisible={() => onToggleVisible(field)}
-              />
-            ))}
-          </div>
-        </SortableContext>
+      <PreviewToolbar
+        viewport={viewport}
+        onViewport={onViewport}
+        title={
+          twoColumn ? (
+            <>
+              Two-column layout.{" "}
+              <button type="button" className="fb-linkbtn" onClick={onEditLayout}>
+                Edit side column
+              </button>
+            </>
+          ) : (
+            "Click a field to edit it. Drag the handle to reorder."
+          )
+        }
+      />
+
+      <div className="fb-canvas-stage">
+        <div className={`fb-preview-frame${viewport === "mobile" ? " fb-preview-frame--mobile" : ""}`}>
+          <FormShell
+            scopeId={`${publicId}-canvas`}
+            desktopStyle={doc.desktopStyle}
+            mobileStyle={doc.mobileStyle}
+            settings={doc.schema.settings}
+            viewport={viewport}
+          >
+            <SortableContext items={fields.map((field) => field.id)} strategy={rectSortingStrategy}>
+              <div className="tclf-grid fb-canvas-grid">
+                {fields.map((field) => (
+                  <CanvasRow
+                    key={field.id}
+                    field={field}
+                    fields={fields}
+                    submitText={doc.schema.settings?.submitText}
+                    buttonStyle={style.buttonStyle}
+                    selected={selectedFieldId === field.id}
+                    onSelect={() => onSelect(field.id)}
+                    onDuplicate={() => onDuplicate(field.id)}
+                    onRemove={() => onRemove(field.id)}
+                    onToggleVisible={() => onToggleVisible(field)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </FormShell>
+        </div>
       </div>
     </div>
   );
@@ -732,6 +792,7 @@ function CanvasRow({ field, fields, submitText, buttonStyle, selected, onSelect,
     ? fields.find((entry) => entry.id === field.conditional.fieldId)
     : null;
   const name = field.label || meta?.label || "field";
+  const column = columnProps(field);
 
   const stop = (handler) => (event) => {
     event.stopPropagation();
@@ -739,36 +800,88 @@ function CanvasRow({ field, fields, submitText, buttonStyle, selected, onSelect,
   };
 
   return (
-    // Clicking the card is a mouse shortcut; the gear button is the keyboard path.
+    // Clicking the field is a mouse shortcut; the gear button is the keyboard path.
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div
       ref={setNodeRef}
-      className={`fb-row${selected ? " fb-row--selected" : ""}${isDragging ? " fb-row--dragging" : ""}${visible ? "" : " fb-row--off"}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...column}
+      className={`${column.className} fb-row${selected ? " fb-row--selected" : ""}${isDragging ? " fb-row--dragging" : ""}${visible ? "" : " fb-row--off"}`}
+      style={{ ...column.style, transform: CSS.Transform.toString(transform), transition }}
       onClick={onSelect}
     >
-      <button
-        type="button"
-        className="fb-row__handle"
-        aria-label={`Reorder ${name}`}
-        title="Drag to reorder"
-        onClick={(event) => event.stopPropagation()}
-        {...attributes}
-        {...listeners}
-      >
-        <DragHandleIcon width={18} height={18} fill="currentColor" />
-      </button>
+      {(!visible || conditionSource || field.type === "hiddenField") && (
+        <div className="fb-row__meta">
+          {!visible && <span className="fb-badge fb-badge--muted">Hidden</span>}
+          {field.type === "hiddenField" && <span className="fb-badge fb-badge--muted">Not shown to visitors</span>}
+          {conditionSource && (
+            <span className="fb-badge fb-badge--muted">Shown when “{conditionSource.label}” is answered</span>
+          )}
+        </div>
+      )}
+
+      <div className="fb-row__toolbar">
+        <button
+          type="button"
+          className="fb-row__handle"
+          aria-label={`Reorder ${name}`}
+          title="Drag to reorder"
+          onClick={(event) => event.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <DragHandleIcon width={16} height={16} fill="currentColor" />
+        </button>
+        <span className="fb-row__type">
+          {meta?.label}
+          {field.width !== "full" ? ` · ${WIDTH_LABEL[field.width]}` : ""}
+        </span>
+        <button
+          type="button"
+          className={`fb-icon-btn fb-icon-btn--sm${selected ? " fb-icon-btn--active" : ""}`}
+          aria-label={`Edit settings for ${name}`}
+          title="Field settings"
+          onClick={stop(onSelect)}
+        >
+          <SettingsIcon width={16} height={16} fill="currentColor" />
+        </button>
+        <button
+          type="button"
+          className="fb-icon-btn fb-icon-btn--sm"
+          aria-label={`Duplicate ${name}`}
+          title={isSubmit ? "A form has one submit button" : "Duplicate"}
+          onClick={stop(onDuplicate)}
+          disabled={isSubmit}
+        >
+          <DuplicateIcon width={16} height={16} fill="currentColor" />
+        </button>
+        <button
+          type="button"
+          className="fb-icon-btn fb-icon-btn--sm"
+          aria-label={visible ? `Hide ${name} from the form` : `Show ${name} on the form`}
+          aria-pressed={!visible}
+          title={isSubmit ? "The submit button is always shown" : visible ? "Hide from form" : "Show on form"}
+          onClick={stop(onToggleVisible)}
+          disabled={isSubmit}
+        >
+          {visible ? (
+            <ViewIcon width={16} height={16} fill="currentColor" />
+          ) : (
+            <HideIcon width={16} height={16} fill="currentColor" />
+          )}
+        </button>
+        <button
+          type="button"
+          className="fb-icon-btn fb-icon-btn--sm fb-icon-btn--critical"
+          aria-label={`Delete ${name}`}
+          title={isSubmit ? "Every form needs a submit button" : "Delete"}
+          onClick={stop(onRemove)}
+          disabled={isSubmit}
+        >
+          <DeleteIcon width={16} height={16} fill="currentColor" />
+        </button>
+      </div>
 
       <div className="fb-row__body">
-        {(!visible || conditionSource || field.width !== "full") && (
-          <div className="fb-row__meta">
-            {!visible && <span className="fb-badge fb-badge--muted">Hidden</span>}
-            {conditionSource && (
-              <span className="fb-badge fb-badge--muted">Shown when “{conditionSource.label}” is answered</span>
-            )}
-            {field.width !== "full" && <span className="fb-badge fb-badge--muted">{WIDTH_LABEL[field.width]} width</span>}
-          </div>
-        )}
         {field.type === "hiddenField" ? (
           <div>
             <div className="tclf-label">{field.label}</div>
@@ -783,53 +896,6 @@ function CanvasRow({ field, fields, submitText, buttonStyle, selected, onSelect,
             bare
           />
         )}
-      </div>
-
-      <div className="fb-row__actions">
-        <button
-          type="button"
-          className={`fb-icon-btn${selected ? " fb-icon-btn--active" : ""}`}
-          aria-label={`Edit settings for ${name}`}
-          title="Field settings"
-          onClick={stop(onSelect)}
-        >
-          <SettingsIcon width={20} height={20} fill="currentColor" />
-        </button>
-        <button
-          type="button"
-          className="fb-icon-btn"
-          aria-label={`Duplicate ${name}`}
-          title={isSubmit ? "A form has one submit button" : "Duplicate"}
-          onClick={stop(onDuplicate)}
-          disabled={isSubmit}
-        >
-          <DuplicateIcon width={20} height={20} fill="currentColor" />
-        </button>
-        <button
-          type="button"
-          className="fb-icon-btn"
-          aria-label={visible ? `Hide ${name} from the form` : `Show ${name} on the form`}
-          aria-pressed={!visible}
-          title={isSubmit ? "The submit button is always shown" : visible ? "Hide from form" : "Show on form"}
-          onClick={stop(onToggleVisible)}
-          disabled={isSubmit}
-        >
-          {visible ? (
-            <ViewIcon width={20} height={20} fill="currentColor" />
-          ) : (
-            <HideIcon width={20} height={20} fill="currentColor" />
-          )}
-        </button>
-        <button
-          type="button"
-          className="fb-icon-btn fb-icon-btn--critical"
-          aria-label={`Delete ${name}`}
-          title={isSubmit ? "Every form needs a submit button" : "Delete"}
-          onClick={stop(onRemove)}
-          disabled={isSubmit}
-        >
-          <DeleteIcon width={20} height={20} fill="currentColor" />
-        </button>
       </div>
     </div>
   );
@@ -848,20 +914,24 @@ function DragOverlayCard({ drag, fields }) {
 
 // ─── Publish ─────────────────────────────────────────────────────────────────
 
-function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpublish, onCopied }) {
-  const editorUrl =
-    shop && apiKey
-      ? `https://${shop}/admin/themes/current/editor?template=index&addAppBlockId=${apiKey}/form&target=newAppsSection`
-      : null;
+// Must match the app block's file name: extensions/tcl-forms/blocks/form.liquid.
+const APP_BLOCK_HANDLE = "form";
+const APP_EMBED_HANDLE = "app-embed";
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(form.publicId);
-      onCopied();
-    } catch {
-      window.prompt("Copy this form ID:", form.publicId);
-    }
-  };
+function formEmbedCode(publicId) {
+  return `<div data-tcl-form="${publicId}"></div>\n<script src="/apps/forms/embed.js" defer></script>`;
+}
+
+function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpublish, onCopied }) {
+  const editorBase = shop ? `https://${shop}/admin/themes/current/editor` : null;
+  const blockUrl =
+    editorBase && apiKey
+      ? `${editorBase}?template=index&addAppBlockId=${apiKey}/${APP_BLOCK_HANDLE}&target=newAppsSection`
+      : null;
+  const embedUrl =
+    editorBase && apiKey ? `${editorBase}?context=apps&activateAppId=${apiKey}/${APP_EMBED_HANDLE}` : null;
+  const embedCode = formEmbedCode(form.publicId);
+  const shortCode = `<div data-tcl-form="${form.publicId}"></div>`;
 
   return (
     <>
@@ -890,27 +960,31 @@ function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpubl
       </div>
 
       <div className="fb-card">
-        <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 650 }}>Add it to your store</h2>
+        <h2 className="fb-publish-title">
+          <ThemeEditIcon width={20} height={20} fill="currentColor" aria-hidden="true" />
+          Option 1: Add it with a theme block
+        </h2>
+        <p className="fb-help" style={{ marginBottom: 8 }}>
+          Works in any Online Store 2.0 theme, on any page and in any section that accepts app blocks.
+        </p>
         <div className="fb-publish-step">
           <span className="fb-publish-step__num">1</span>
           <div>
             <strong>Copy the form ID</strong>
-            <div className="fb-copy">
-              <code>{form.publicId}</code>
-              <Button icon={ClipboardIcon} onClick={copy}>
-                Copy
-              </Button>
-            </div>
+            <CopyField value={form.publicId} label="Form ID" onCopied={onCopied} />
           </div>
         </div>
         <div className="fb-publish-step">
           <span className="fb-publish-step__num">2</span>
           <div>
             <strong>Add the “TCL Form” block in the theme editor</strong>
-            <p className="fb-help">Open your theme, add the block to any page section, and paste the ID into its “Form public ID” setting.</p>
-            {editorUrl && (
+            <p className="fb-help">
+              Click <em>Add block</em> (or <em>Add section → Apps</em>) wherever you want the form, choose “TCL Form”,
+              and paste the ID into its “Form ID” setting.
+            </p>
+            {blockUrl && (
               <div style={{ marginTop: 8 }}>
-                <a className="fb-btn" href={editorUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
+                <a className="fb-btn" href={blockUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
                   <ExternalIcon width={18} height={18} fill="currentColor" aria-hidden="true" />
                   Open theme editor
                 </a>
@@ -929,7 +1003,65 @@ function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpubl
           </div>
         </div>
       </div>
+
+      <div className="fb-card">
+        <h2 className="fb-publish-title">
+          <CodeIcon width={20} height={20} fill="currentColor" aria-hidden="true" />
+          Option 2: Paste the form code anywhere
+        </h2>
+        <p className="fb-help" style={{ marginBottom: 12 }}>
+          Paste this into a <em>Custom Liquid</em> section or block, any theme file (.liquid), or a page template. The
+          form loads itself, so no theme block is needed.
+        </p>
+        <CopyField value={embedCode} label="Form code" multiline onCopied={onCopied} />
+
+        <div className="fb-publish-note">
+          <strong>Embedding in places that strip scripts</strong> (page content, blog posts, product descriptions)?
+          Turn on the “TCL Forms Embed” app embed once, then paste just this short code:
+          <CopyField value={shortCode} label="Short code" onCopied={onCopied} />
+          {embedUrl && (
+            <div style={{ marginTop: 8 }}>
+              <a className="fb-btn" href={embedUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
+                <ExternalIcon width={18} height={18} fill="currentColor" aria-hidden="true" />
+                Turn on app embed
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
     </>
+  );
+}
+
+// Clipboard writes can be blocked inside the embedded admin; when they are, the
+// text is selected so the merchant can press Ctrl+C.
+function CopyField({ value, label, multiline = false, onCopied }) {
+  const ref = useRef(null);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      onCopied(label);
+    } catch {
+      ref.current?.focus();
+      ref.current?.select();
+    }
+  };
+  const Tag = multiline ? "textarea" : "input";
+  return (
+    <div className={`fb-copy${multiline ? " fb-copy--multiline" : ""}`}>
+      <Tag
+        ref={ref}
+        className="fb-copy__value"
+        readOnly
+        value={value}
+        aria-label={label}
+        rows={multiline ? 2 : undefined}
+        onFocus={(event) => event.target.select()}
+      />
+      <Button icon={ClipboardIcon} onClick={copy}>
+        Copy
+      </Button>
+    </div>
   );
 }
 

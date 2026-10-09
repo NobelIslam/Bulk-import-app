@@ -1,6 +1,7 @@
-import { RangeSlider, Select, TextField } from "@shopify/polaris";
+import { RangeSlider, Select } from "@shopify/polaris";
 import { ALIGNMENTS, BUTTON_STYLES, FONT_FAMILIES, INPUT_STYLES, NUMERIC_RANGES } from "../../forms/design";
 import { Section, Switch } from "./FieldSettings";
+import { ColorField } from "./ContentControls";
 
 const typography = [
   ["labelFontSize", "Label size"],
@@ -96,44 +97,5 @@ export default function DesignSettings({ style, onChange }) {
         />
       </Section>
     </div>
-  );
-}
-
-const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
-
-function ColorField({ label, value, onChange }) {
-  const swatchColor = HEX_PATTERN.test(value) ? value : "#ffffff";
-  return (
-    <TextField
-      label={label}
-      value={value}
-      onChange={onChange}
-      autoComplete="off"
-      monospaced
-      error={value && !HEX_PATTERN.test(value) ? "Use a hex color like #1a2b3c." : undefined}
-      connectedLeft={
-        <div style={{ position: "relative", width: 36, height: 36 }}>
-          <div
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              margin: 2,
-              borderRadius: 6,
-              border: "1px solid #c9cccf",
-              background: swatchColor,
-              pointerEvents: "none",
-            }}
-          />
-          <input
-            type="color"
-            value={swatchColor.length === 4 ? `#${[...swatchColor.slice(1)].map((c) => c + c).join("")}` : swatchColor}
-            onChange={(event) => onChange(event.target.value)}
-            aria-label={`${label} color picker`}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", border: 0, padding: 0 }}
-          />
-        </div>
-      }
-    />
   );
 }
