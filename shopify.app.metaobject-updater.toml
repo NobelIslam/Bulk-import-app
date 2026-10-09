@@ -1,0 +1,38 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "adda1b764d184c73ba4e4df2161c68e5"
+application_url = "https://bulk-importer-app.onrender.com"
+embedded = true
+name = "Metaobject Updater"
+
+[build]
+automatically_update_urls_on_dev = true
+
+[app_proxy]
+url = "https://bulk-importer-app.onrender.com/api/proxy/forms"
+prefix = "apps"
+subpath = "forms"
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_files,write_files,read_locales,write_locales,write_locations,read_locations,read_metaobject_definitions,write_metaobject_definitions,read_metaobjects,write_metaobjects,read_online_store_navigation,write_online_store_navigation,read_online_store_pages,write_online_store_pages,write_products,read_content,write_content,write_theme_code,read_themes,write_themes,read_translations,write_translations"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://bulk-importer-app.onrender.com/auth/callback",
+  "https://bulk-importer-app.onrender.com/auth/shopify/callback",
+  "https://bulk-importer-app.onrender.com/api/auth/callback"
+]
