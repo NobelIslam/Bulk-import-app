@@ -375,7 +375,20 @@ export function defaultField(type, takenKeys = []) {
     hideLabel: false,
     cssClass: "",
     spacing: defaultSpacing(),
+    // Which column of a two-column form the field sits in: "main" or "side".
+    column: "main",
     ...typeDefaults(meta.type, label),
+  };
+}
+
+// Splits fields into the side and main columns. One-column forms show every
+// field in the main column, in order, whatever column it was placed in.
+export function splitColumns(fields, settings) {
+  const list = Array.isArray(fields) ? fields : [];
+  if (settings?.layout !== "twoColumn") return { side: [], main: list };
+  return {
+    side: list.filter((field) => field.column === "side"),
+    main: list.filter((field) => field.column !== "side"),
   };
 }
 
@@ -616,6 +629,7 @@ export function normalizeSchema(raw) {
       next.hideLabel = Boolean(field.hideLabel);
       next.cssClass = sanitizeClassName(field.cssClass);
       next.spacing = normalizeSpacing(field.spacing);
+      next.column = field.column === "side" && meta.type !== "submitButton" ? "side" : "main";
       if (RICH_TEXT_TYPES.includes(meta.type)) {
         // Older forms only have a plain label; it becomes the rich text.
         next.richText = sanitizeRichText(

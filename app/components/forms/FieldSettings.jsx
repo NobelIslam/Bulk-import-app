@@ -71,6 +71,7 @@ export default function FieldSettings({
   onDuplicate,
   onClose,
   onError,
+  twoColumn = false,
 }) {
   const meta = getFieldType(field.type);
   const isLayout = meta?.submissionKey === false;
@@ -183,6 +184,28 @@ export default function FieldSettings({
             disabled={field.type === "consentCheckbox"}
             onChange={(required) => onUpdate({ required })}
           />
+        )}
+
+        {twoColumn && !isSubmit && (
+          <div>
+            <span className="fb-field-label" id={`column-${field.id}`}>Column</span>
+            <div className="fb-seg" role="group" aria-labelledby={`column-${field.id}`}>
+              {[
+                ["side", "Side column"],
+                ["main", "Form column"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={(field.column === "side" ? "side" : "main") === value}
+                  onClick={() => onUpdate({ column: value })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="fb-help">You can also drag fields between the two columns.</p>
+          </div>
         )}
 
         {field.type !== "hiddenField" && (

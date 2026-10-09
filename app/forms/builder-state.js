@@ -94,6 +94,27 @@ export function moveField(doc, activeId, overId) {
   return { ...doc, schema: { ...doc.schema, fields } };
 }
 
+// Puts `field` (new, or already in the form) into `column`, before `beforeId`
+// or at the end of that column. The submit button always stays in the main
+// column, and new main-column fields land above it.
+export function placeField(doc, field, column, beforeId = null) {
+  const target = field.type === "submitButton" ? "main" : column === "side" ? "side" : "main";
+  const fields = doc.schema.fields.filter((entry) => entry.id !== field.id);
+  let placed = { ...field, column: target };
+  if (placed.key && fields.some((entry) => entry.key === placed.key)) {
+    const takenKeys = fields.map((entry) => entry.key).filter(Boolean);
+    placed = { ...placed, key: slugifyKey(placed.key, takenKeys) };
+  }
+
+  let at = beforeId ? fields.findIndex((entry) => entry.id === beforeId) : -1;
+  if (at === -1) {
+    const submitIndex = fields.findIndex((entry) => entry.type === "submitButton");
+    at = target === "side" || submitIndex === -1 || placed.type === "submitButton" ? fields.length : submitIndex;
+  }
+  fields.splice(at, 0, placed);
+  return { ...doc, schema: { ...doc.schema, fields } };
+}
+
 export function setSchemaSettings(doc, patch) {
   return { ...doc, schema: { ...doc.schema, settings: { ...doc.schema.settings, ...patch } } };
 }

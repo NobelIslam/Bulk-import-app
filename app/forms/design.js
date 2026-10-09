@@ -230,6 +230,11 @@ ${scope} .tclf-side[data-fit="cover"] .tclf-side__img { position: absolute; inse
 ${scope} .tclf-side[data-fit="contain"] .tclf-side__img { height: auto; max-height: 100%; object-fit: contain; margin-bottom: 16px; }
 ${scope} .tclf-side__content { position: relative; z-index: 1; }
 ${scope} .tclf-side__content:empty { display: none; }
+${scope} .tclf-form { display: block; margin: 0; }
+${scope} .tclf-grid[hidden] { display: none; }
+${scope} .tclf-side > .tclf-grid { position: relative; z-index: 1; width: 100%; }
+${scope} .tclf-side__content:not(:empty) + .tclf-grid { margin-top: 16px; }
+${scope} .tclf-side .tclf-image img { max-width: 100%; }
 ${scope} .tclf-date { position: relative; width: 100%; }
 ${scope} .tclf-date .tclf-date__input { cursor: pointer; padding-right: 40px; }
 ${scope} .tclf-date__icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; pointer-events: none; color: #6d7175; }

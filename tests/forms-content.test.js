@@ -104,3 +104,30 @@ test("date submissions are validated against the picker options", () => {
   assert.equal(ok.isValid, true);
   assert.equal(ok.values.when, "2026-12-31");
 });
+
+test("fields can be placed into the side column and back", async () => {
+  const { placeField } = await import("../app/forms/builder-state.js");
+  const { splitColumns } = await import("../app/forms/fields.js");
+  const name = { ...defaultField("shortText"), id: "name", key: "name" };
+  const submit = emptySchema().fields[0];
+  let doc = { schema: { ...emptySchema(), fields: [name, submit], settings: { layout: "twoColumn" } } };
+
+  const image = { ...defaultField("image"), id: "img" };
+  doc = placeField(doc, image, "side");
+  let cols = splitColumns(doc.schema.fields, doc.schema.settings);
+  assert.deepEqual(cols.side.map((f) => f.id), ["img"]);
+  assert.deepEqual(cols.main.map((f) => f.id), ["name", submit.id]);
+
+  // Moving a main field to the side puts it before the target field.
+  doc = placeField(doc, name, "side", "img");
+  cols = splitColumns(doc.schema.fields, doc.schema.settings);
+  assert.deepEqual(cols.side.map((f) => f.id), ["name", "img"]);
+
+  // The submit button never leaves the main column.
+  doc = placeField(doc, submit, "side");
+  assert.equal(doc.schema.fields.find((f) => f.id === submit.id).column, "main");
+
+  // One-column forms show everything in the main column.
+  assert.equal(splitColumns(doc.schema.fields, { layout: "single" }).side.length, 0);
+  assert.equal(normalizeSchema({ fields: [{ ...submit, column: "side" }] }).fields[0].column, "main");
+});

@@ -403,16 +403,20 @@
     styleTag.textContent = payload.css || "";
     card.appendChild(styleTag);
 
-    var layout = document.createElement("div");
-    layout.className = "tclf-layout";
-    layout.innerHTML = (twoColumn ? sidePanel(side) : "") + '<div class="tclf-main"></div>';
-    card.appendChild(layout);
-
+    // One <form> wraps both columns so side-column inputs submit too.
     var el = document.createElement("form");
-    el.className = "tclf-grid";
+    el.className = "tclf-form";
     el.noValidate = true;
+    el.innerHTML = '<div class="tclf-layout">' + (twoColumn ? sidePanel(side) : "") +
+      '<div class="tclf-main"><div class="tclf-grid"></div></div></div>';
+    card.appendChild(el);
+    var mainGrid = el.querySelector(".tclf-main > .tclf-grid");
 
-    var html = fields.map(function (f) {
+    // Mirrors splitColumns() in app/forms/fields.js.
+    var sideFields = twoColumn ? fields.filter(function (f) { return f.column === "side"; }) : [];
+    var mainFields = twoColumn ? fields.filter(function (f) { return f.column !== "side"; }) : fields;
+
+    function fieldHtml(f) {
       f.__buttonStyle = style.buttonStyle || "solid";
       var hidden = f.type === "hiddenField" ? " hidden" : "";
       var inner = control(f, uid);
@@ -422,14 +426,21 @@
         (f.helpText && f.type !== "hiddenField" ? '<span class="tclf-help" id="tclf-' + uid + "-" + esc(f.id) + '-help">' + esc(f.helpText) + "</span>" : "") +
         (f.key ? '<span class="tclf-error" data-error-for="' + esc(f.key) + '" role="alert"></span>' : "") +
         "</div>";
-    }).join("");
+    }
 
+    if (sideFields.length) {
+      var sideGrid = document.createElement("div");
+      sideGrid.className = "tclf-grid";
+      sideGrid.innerHTML = sideFields.map(fieldHtml).join("");
+      el.querySelector(".tclf-side").appendChild(sideGrid);
+    }
+
+    var html = mainFields.map(fieldHtml).join("");
     if (settings.honeypotEnabled !== false) {
       html += '<div class="tclf-hp" aria-hidden="true"><label>Leave this empty<input type="text" name="__tclf_hp" tabindex="-1" autocomplete="off"></label></div>';
     }
     html += '<div class="tclf-form-error" role="alert" hidden></div>';
-    el.innerHTML = html;
-    layout.querySelector(".tclf-main").appendChild(el);
+    mainGrid.innerHTML = html;
     host.replaceChildren(card);
 
     fields.forEach(function (f) {
@@ -532,7 +543,8 @@
             window.location.assign(redirect);
             return;
           }
-          el.innerHTML = '<div class="tclf-success" role="status">' + esc(result.body.message || settings.successMessage || "Thanks!") + "</div>";
+          if (sideGrid) sideGrid.hidden = true;
+          mainGrid.innerHTML = '<div class="tclf-success" role="status">' + esc(result.body.message || settings.successMessage || "Thanks!") + "</div>";
         })
         .catch(function () {
           var banner = el.querySelector(".tclf-form-error");

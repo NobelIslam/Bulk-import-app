@@ -8,6 +8,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
@@ -41,13 +42,13 @@ import {
 } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import { getForm, getFormSubmissionCounts, setFormStatus, updateForm } from "../forms/forms.server";
-import { defaultField, getFieldType, normalizeSchema, WIDTH_OPTIONS } from "../forms/fields";
+import { defaultField, getFieldType, normalizeSchema, splitColumns, WIDTH_OPTIONS } from "../forms/fields";
 import { DEFAULT_DESKTOP_STYLE, resolveStyle } from "../forms/design";
 import useBuilderHistory, {
   duplicateField,
   insertField,
   moveField,
-  moveFieldToIndex,
+  placeField,
   removeField,
   setSchemaSettings,
   setStyle,
@@ -64,6 +65,27 @@ import "@shopify/polaris/build/esm/styles.css";
 import "../components/forms/builder.css";
 
 const DROP_ZONE_ID = "tclf-dropzone";
+const MAIN_DROP_ID = "tclf-column-main";
+const SIDE_DROP_ID = "tclf-column-side";
+const CONTAINER_IDS = [DROP_ZONE_ID, MAIN_DROP_ID, SIDE_DROP_ID];
+
+// Prefer the field under the pointer; over a column's empty space, drop into
+// that column; otherwise fall back to the nearest target.
+function collisionDetection(args) {
+  const within = pointerWithin(args);
+  if (within.length) {
+    const items = within.filter((entry) => !CONTAINER_IDS.includes(entry.id));
+    if (items.length) {
+      const ids = items.map((entry) => entry.id);
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter((entry) => ids.includes(entry.id)),
+      });
+    }
+    return within;
+  }
+  return closestCenter(args);
+}
 const AUTOSAVE_DELAY = 1500;
 const TABS = [
   { id: "build", label: "Build" },
@@ -226,12 +248,15 @@ export default function FormBuilder() {
 
   // ─── Field operations ──────────────────────────────────────────────────────
 
-  const addFieldOfType = (type, index = null) => {
+  // `column`/`beforeId` come from a drop; a click appends to the main column.
+  const addFieldOfType = (type, column = "main", beforeId = null) => {
     if (type === "submitButton" && hasSubmit) return;
     const takenKeys = fields.map((field) => field.key).filter(Boolean);
     const field = defaultField(type, takenKeys);
     if (!field) return;
-    update((current) => insertField(current, field, index));
+    update((current) =>
+      column === "main" && !beforeId ? insertField(current, field) : placeField(current, field, column, beforeId),
+    );
     select(field.id);
     setTab("build");
   };
@@ -303,20 +328,37 @@ export default function FormBuilder() {
     });
   };
 
+  // Where a drop lands: the column, and the field to insert before (null = end).
+  const dropTarget = (overId) => {
+    const columns = splitColumns(fields, doc.schema.settings);
+    if (overId === SIDE_DROP_ID) return { column: "side", beforeId: null };
+    if (overId === MAIN_DROP_ID) return { column: "main", beforeId: null };
+    if (overId === DROP_ZONE_ID) return { column: "main", beforeId: columns.main[0]?.id || null };
+    const overField = fields.find((field) => field.id === overId);
+    if (!overField) return null;
+    return { column: columns.side.includes(overField) ? "side" : "main", beforeId: overField.id };
+  };
+
   const handleDragEnd = ({ active, over }) => {
     setActiveDrag(null);
     if (!over) return;
+    const target = dropTarget(over.id);
+    if (!target) return;
 
     if (active.data.current?.source === "palette") {
-      const index = over.id === DROP_ZONE_ID ? 0 : fields.findIndex((field) => field.id === over.id);
-      addFieldOfType(active.data.current.fieldType, index === -1 ? null : index);
+      addFieldOfType(active.data.current.fieldType, target.column, target.beforeId);
       return;
     }
 
-    if (over.id === DROP_ZONE_ID) {
-      update((current) => moveFieldToIndex(current, String(active.id), 0));
-    } else if (active.id !== over.id) {
-      update((current) => moveField(current, String(active.id), String(over.id)));
+    const moving = fields.find((field) => field.id === active.id);
+    if (!moving || active.id === over.id) return;
+    const twoColumn = doc.schema.settings?.layout === "twoColumn";
+    const fromColumn = twoColumn && moving.column === "side" ? "side" : "main";
+    if (fromColumn === target.column && target.beforeId) {
+      // Same column: a sortable move, so dragging down lands after the target.
+      update((current) => moveField(current, moving.id, target.beforeId));
+    } else {
+      update((current) => placeField(current, moving, target.column, target.beforeId));
     }
   };
 
@@ -342,7 +384,7 @@ export default function FormBuilder() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveDrag(null)}
@@ -513,6 +555,7 @@ export default function FormBuilder() {
                 onDuplicate={() => update((current) => duplicateField(current, selectedFieldId))}
                 onClose={() => select(null)}
                 onError={showError}
+                twoColumn={doc.schema.settings?.layout === "twoColumn"}
               />
             ) : (
               <>
@@ -716,6 +759,18 @@ function Canvas({
   const { setNodeRef, isOver } = useDroppable({ id: DROP_ZONE_ID });
   const style = resolveStyle(doc.desktopStyle, doc.mobileStyle, viewport);
   const twoColumn = doc.schema.settings?.layout === "twoColumn";
+  const columns = splitColumns(fields, doc.schema.settings);
+  const rowProps = (field) => ({
+    field,
+    fields,
+    submitText: doc.schema.settings?.submitText,
+    buttonStyle: style.buttonStyle,
+    selected: selectedFieldId === field.id,
+    onSelect: () => onSelect(field.id),
+    onDuplicate: () => onDuplicate(field.id),
+    onRemove: () => onRemove(field.id),
+    onToggleVisible: () => onToggleVisible(field),
+  });
 
   return (
     <div className="fb-card">
@@ -754,29 +809,31 @@ function Canvas({
             mobileStyle={doc.mobileStyle}
             settings={doc.schema.settings}
             viewport={viewport}
+            sideChildren={
+              <CanvasColumn id={SIDE_DROP_ID} fields={columns.side} rowProps={rowProps} emptyHint="Drag elements here, like an Image, Heading or Paragraph" />
+            }
           >
-            <SortableContext items={fields.map((field) => field.id)} strategy={rectSortingStrategy}>
-              <div className="tclf-grid fb-canvas-grid">
-                {fields.map((field) => (
-                  <CanvasRow
-                    key={field.id}
-                    field={field}
-                    fields={fields}
-                    submitText={doc.schema.settings?.submitText}
-                    buttonStyle={style.buttonStyle}
-                    selected={selectedFieldId === field.id}
-                    onSelect={() => onSelect(field.id)}
-                    onDuplicate={() => onDuplicate(field.id)}
-                    onRemove={() => onRemove(field.id)}
-                    onToggleVisible={() => onToggleVisible(field)}
-                  />
-                ))}
-              </div>
-            </SortableContext>
+            <CanvasColumn id={MAIN_DROP_ID} fields={columns.main} rowProps={rowProps} emptyHint="Drag elements here" />
           </FormShell>
         </div>
       </div>
     </div>
+  );
+}
+
+// One column of the canvas: a drop target (so empty columns accept drops) and
+// its own sortable list.
+function CanvasColumn({ id, fields, rowProps, emptyHint }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <SortableContext items={fields.map((field) => field.id)} strategy={rectSortingStrategy}>
+      <div ref={setNodeRef} className={`tclf-grid fb-canvas-grid${isOver ? " fb-canvas-grid--over" : ""}`}>
+        {fields.length === 0 && <div className="fb-column-empty">{emptyHint}</div>}
+        {fields.map((field) => (
+          <CanvasRow key={field.id} {...rowProps(field)} />
+        ))}
+      </div>
+    </SortableContext>
   );
 }
 

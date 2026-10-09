@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { getFieldType, isConditionMet } from "../../forms/fields";
+import { getFieldType, isConditionMet, splitColumns } from "../../forms/fields";
 import { buildFormCss, resolveStyle, DEFAULT_DESKTOP_STYLE } from "../../forms/design";
 import {
   addDays,
@@ -53,6 +53,19 @@ export default function FormPreview({
     [fields],
   );
 
+  const columns = splitColumns(fields, settings);
+  const renderField = (field) => (
+    <FormFieldPreview
+      key={field.id}
+      field={field}
+      uid={uid}
+      interactive={interactive}
+      submitText={settings.submitText}
+      buttonStyle={style.buttonStyle}
+      hiddenByCondition={interactive && !isConditionMet(field, fields, values)}
+    />
+  );
+
   return (
     <FormShell
       scopeId={scopeId}
@@ -60,28 +73,16 @@ export default function FormPreview({
       mobileStyle={mobileStyle}
       settings={settings}
       viewport={viewport}
-    >
-      <form
-        className="tclf-grid"
-        noValidate
-        onChange={interactive ? (event) => collect(event.currentTarget) : undefined}
-        onSubmit={(event) => {
+      formProps={{
+        onChange: interactive ? (event) => collect(event.currentTarget) : undefined,
+        onSubmit: (event) => {
           event.preventDefault();
           onSubmitPreview?.();
-        }}
-      >
-        {fields.map((field) => (
-          <FormFieldPreview
-            key={field.id}
-            field={field}
-            uid={uid}
-            interactive={interactive}
-            submitText={settings.submitText}
-            buttonStyle={style.buttonStyle}
-            hiddenByCondition={interactive && !isConditionMet(field, fields, values)}
-          />
-        ))}
-      </form>
+        },
+      }}
+      sideChildren={columns.side.length > 0 && <div className="tclf-grid">{columns.side.map(renderField)}</div>}
+    >
+      <div className="tclf-grid">{columns.main.map(renderField)}</div>
     </FormShell>
   );
 }
@@ -89,7 +90,19 @@ export default function FormPreview({
 // The card, its scoped stylesheet and the one/two column layout around the
 // fields. The builder canvas wraps its sortable list in the same shell, so the
 // Build tab shows exactly what the Design tab and storefront show.
-export function FormShell({ scopeId, desktopStyle, mobileStyle, settings, viewport = "desktop", children }) {
+// `formProps` wraps both columns in one <form> so side-column inputs submit too;
+// the canvas leaves it out. `sideChildren` renders below the side column's
+// image and text.
+export function FormShell({
+  scopeId,
+  desktopStyle,
+  mobileStyle,
+  settings,
+  viewport = "desktop",
+  formProps,
+  sideChildren,
+  children,
+}) {
   const style = resolveStyle(desktopStyle, mobileStyle, viewport);
   const css = buildFormCss({
     publicId: scopeId,
@@ -100,6 +113,12 @@ export function FormShell({ scopeId, desktopStyle, mobileStyle, settings, viewpo
   });
   const twoColumn = settings?.layout === "twoColumn";
   const side = settings?.sidePanel || {};
+  const layout = (
+    <div className="tclf-layout">
+      {twoColumn && <SidePanel side={side}>{sideChildren}</SidePanel>}
+      <div className="tclf-main">{children}</div>
+    </div>
+  );
 
   return (
     <div
@@ -109,20 +128,24 @@ export function FormShell({ scopeId, desktopStyle, mobileStyle, settings, viewpo
       data-side-position={side.position === "right" ? "right" : "left"}
     >
       <style dangerouslySetInnerHTML={{ __html: css }} />
-      <div className="tclf-layout">
-        {twoColumn && <SidePanel side={side} />}
-        <div className="tclf-main">{children}</div>
-      </div>
+      {formProps ? (
+        <form className="tclf-form" noValidate {...formProps}>
+          {layout}
+        </form>
+      ) : (
+        layout
+      )}
     </div>
   );
 }
 
-export function SidePanel({ side }) {
+export function SidePanel({ side, children }) {
   return (
     <aside className="tclf-side" data-fit={side.imageFit || "cover"} data-valign={side.verticalAlign || "center"}>
       {side.imageUrl && <img className="tclf-side__img" src={side.imageUrl} alt={side.imageAlt || ""} />}
       {/* Rich text is sanitized by normalizeSidePanel() before it is stored or previewed. */}
       <div className="tclf-side__content tclf-rich" dangerouslySetInnerHTML={{ __html: side.content || "" }} />
+      {children}
     </aside>
   );
 }
