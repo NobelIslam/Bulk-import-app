@@ -957,6 +957,11 @@
   border-radius: 12px;
   background: #ececec;
 }
+.fb-canvas-stage.fb-stage--page,
+.fb-preview-stage.fb-stage--page {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #e1e3e5;
+}
 .fb-preview-frame {
   width: 100%;
   transition: width 0.2s ease;

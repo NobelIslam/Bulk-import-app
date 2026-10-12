@@ -44,6 +44,7 @@ import { authenticate } from "../shopify.server";
 import { getForm, getFormSubmissionCounts, setFormStatus, updateForm } from "../forms/forms.server";
 import { defaultField, getFieldType, normalizeSchema, splitColumns, WIDTH_OPTIONS } from "../forms/fields";
 import { DEFAULT_DESKTOP_STYLE, resolveStyle } from "../forms/design";
+import { parseColor } from "../forms/color";
 import useBuilderHistory, {
   duplicateField,
   insertField,
@@ -158,6 +159,14 @@ function docFromForm(form) {
     desktopStyle: { ...DEFAULT_DESKTOP_STYLE, ...(form.desktopStyle || {}) },
     mobileStyle: form.mobileStyle || {},
   };
+}
+
+// A see-through card shows whatever is behind it. On the storefront that is the
+// theme's page, so the stage turns white instead of the builder's grey,
+// otherwise a transparent card looks grey here and white on the live site.
+function stageClassName(base, style) {
+  const color = parseColor(style?.backgroundColor);
+  return color && color.a < 1 ? `${base} fb-stage--page` : base;
 }
 
 function isEditableTarget(target) {
@@ -488,7 +497,7 @@ export default function FormBuilder() {
             {tab === "design" && (
               <div className="fb-card">
                 <PreviewToolbar viewport={viewport} onViewport={setViewport} title="Live preview" />
-                <div className="fb-preview-stage">
+                <div className={stageClassName("fb-preview-stage", resolvedStyle)}>
                   <div className={`fb-preview-frame${viewport === "mobile" ? " fb-preview-frame--mobile" : ""}`}>
                     {preview}
                   </div>
@@ -615,7 +624,7 @@ export default function FormBuilder() {
             onViewport={setViewport}
             title="Fill it in to try conditional fields. Nothing is submitted."
           />
-          <div className="fb-preview-stage">
+          <div className={stageClassName("fb-preview-stage", resolvedStyle)}>
             <div className={`fb-preview-frame${viewport === "mobile" ? " fb-preview-frame--mobile" : ""}`}>{preview}</div>
           </div>
         </Modal.Section>
@@ -784,7 +793,7 @@ function Canvas({
         }
       />
 
-      <div className="fb-canvas-stage">
+      <div className={stageClassName("fb-canvas-stage", style)}>
         <div className={`fb-preview-frame${viewport === "mobile" ? " fb-preview-frame--mobile" : ""}`}>
           <FormShell
             scopeId={`${publicId}-canvas`}

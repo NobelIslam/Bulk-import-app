@@ -564,7 +564,7 @@
     var id = (host.getAttribute("data-tcl-form") || "").trim();
     if (!id || host.getAttribute("data-tcl-loaded")) return;
     host.setAttribute("data-tcl-loaded", "true");
-    fetch(BASE + encodeURIComponent(id), { headers: { Accept: "application/json" } })
+    fetch(BASE + encodeURIComponent(id), { headers: { Accept: "application/json" }, cache: "no-store" })
       .then(function (response) {
         if (!response.ok) throw new Error("unavailable");
         return response.json();

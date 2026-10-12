@@ -184,6 +184,8 @@ ${scope} {
   max-width: var(--tclf-width);
   margin: 0 auto;
   text-align: var(--tclf-align);
+  line-height: 1.4;
+  letter-spacing: normal;
 }
 ${scope} *, ${scope} *::before, ${scope} *::after { box-sizing: inherit; }
 ${scope} .tclf-grid { display: flex; flex-wrap: wrap; gap: var(--tclf-gap); }
@@ -269,6 +271,13 @@ ${scope} textarea, ${scope} input[type="file"] {
   padding: 10px 12px;
   width: 100%;
   min-height: 40px;
+  /* Themes style bare inputs (line-height, height, margins, shadows); pin them
+     so the storefront matches the builder preview. */
+  line-height: 1.4;
+  height: auto;
+  margin: 0;
+  box-shadow: none;
+  letter-spacing: normal;
 }
 ${scope} textarea { min-height: 110px; resize: vertical; }
 ${scope} [data-input-style="underline"] input, ${scope} [data-input-style="underline"] select,

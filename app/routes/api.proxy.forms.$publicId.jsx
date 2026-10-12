@@ -56,6 +56,8 @@ export async function loader({ request, params }) {
     fields: normalized.fields.filter((field) => field.visible !== false),
   };
 
+  // no-store so a saved change shows on the storefront on the next page load.
+  const headers = { "cache-control": "no-store" };
   return json({
     form: {
       publicId: form.publicId,
@@ -72,7 +74,7 @@ export async function loader({ request, params }) {
       mobile: form.mobileStyle,
       settings: schema.settings,
     }),
-  });
+  }, { headers });
 }
 
 export async function action({ request, params }) {
