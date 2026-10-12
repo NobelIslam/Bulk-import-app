@@ -1,0 +1,360 @@
+/* Blog editor. Layout chrome (sidebar, header, panel, elements, spacing grid)
+   comes from ../forms/builder.css; this file adds the canvas, drop targets and
+   blog-specific controls. */
+
+.bb-group-hint {
+  margin: -6px 0 10px;
+  color: var(--fb-subdued);
+  font-size: 12px;
+}
+
+/* ─── Beginner guide ───────────────────────────────────────────────────────── */
+
+.bb-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.bb-guide__step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--fb-border);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--fb-subdued);
+}
+.bb-guide__step strong {
+  display: block;
+  color: var(--fb-text);
+  font-size: 14px;
+}
+.bb-guide__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--fb-blue-tint);
+  color: var(--fb-blue);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.bb-dragbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: var(--fb-blue);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 6px 16px rgba(44, 110, 203, 0.3);
+}
+
+/* ─── Canvas ───────────────────────────────────────────────────────────────── */
+
+.bb-stage {
+  padding: 32px 24px 64px;
+  background: #ffffff;
+  border: 1px solid var(--fb-border);
+  border-radius: 12px;
+  min-height: 60vh;
+}
+.bb-stage--mobile .bb-page {
+  max-width: 390px !important;
+}
+.bb-title-preview {
+  max-width: var(--bb-width, 760px);
+  margin: 0 auto 24px;
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #b5b5b5;
+}
+.bb-page {
+  color: #303030;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 160px;
+}
+.bb-page :where(p, ul, ol) {
+  margin: 0 0 0.85em;
+}
+.bb-page :where(p, ul, ol):last-child {
+  margin-bottom: 0;
+}
+/* Links and embeds are inert while editing, so clicks select instead. */
+.bb-page a,
+.bb-page iframe {
+  pointer-events: none;
+}
+.bb-page img {
+  max-width: 100%;
+}
+
+.bb-block {
+  position: relative;
+  display: flow-root;
+  min-width: 0;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: outline-color 0.1s ease;
+}
+.bb-block:hover:not(:has(.bb-block:hover)) {
+  outline: 1px dashed var(--fb-blue);
+}
+.bb-block--selected,
+.bb-block--selected:hover:not(:has(.bb-block:hover)) {
+  outline: 2px solid var(--fb-green);
+  outline-offset: -2px;
+}
+.bb-block--dragging {
+  opacity: 0.35;
+}
+/* Handles hide with a short delay, so there's time to move the pointer onto
+   one. Hidden handles use visibility, so they can't be grabbed by accident. */
+.bb-block__tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease 0.45s, visibility 0s linear 0.57s;
+}
+.bb-block:hover:not(:has(.bb-block:hover)) > .bb-block__tag,
+.bb-block--selected > .bb-block__tag {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.bb-block--selected > .bb-block__tag {
+  z-index: 40;
+}
+/* Containers put their handle above the top-right corner, clear of the
+   elements inside them, whose handles sit at their own top-left. */
+.bb-block--container > .bb-block__tag {
+  top: auto;
+  bottom: 100%;
+  left: auto;
+  right: 0;
+}
+.bb-block--container > .bb-block__tag .bb-block__grip {
+  border-radius: 6px 6px 0 0;
+}
+.bb-block__grip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: 0 0 6px 0;
+  background: var(--fb-blue);
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+  touch-action: none;
+  white-space: nowrap;
+}
+.bb-block--selected > .bb-block__tag .bb-block__grip {
+  background: var(--fb-green);
+}
+.bb-block__grip:active {
+  cursor: grabbing;
+}
+
+/* Empty containers: always visible, so beginners see where things can go. */
+.bb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 96px;
+  padding: 18px 12px;
+  border: 2px dashed #b4c7e2;
+  border-radius: 10px;
+  background: rgba(240, 246, 255, 0.7);
+  color: #4a5d7a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  transition: all 0.12s ease;
+}
+.bb-empty strong {
+  font-size: 14px;
+  color: #1f3b63;
+}
+.bb-empty--root {
+  min-height: 260px;
+  font-size: 14px;
+}
+.bb-empty--root strong {
+  font-size: 17px;
+}
+.bb-empty--active {
+  border-color: var(--fb-blue);
+  background: #e6f0ff;
+}
+.bb-empty--over {
+  border-style: solid;
+  border-color: var(--fb-blue);
+  background: #cfe1ff;
+  color: #102a4c;
+  box-shadow: 0 0 0 4px rgba(44, 110, 203, 0.18);
+}
+
+/* Drop lines between elements, shown only while dragging. */
+.bb-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  margin: -6px 0;
+  z-index: 10;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: min-height 0.12s ease, margin 0.12s ease;
+}
+.bb-slot::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 2px dashed #8fb3e3;
+}
+.bb-slot--over {
+  min-height: 52px;
+  margin: 0;
+}
+.bb-slot--over::before {
+  top: 0;
+  bottom: 0;
+  border: 2px solid var(--fb-blue);
+  border-radius: 8px;
+  background: #e6f0ff;
+}
+.bb-slot span {
+  position: relative;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--fb-blue);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+}
+.bb-slot--over span {
+  opacity: 1;
+}
+
+.bb-col {
+  min-height: 40px;
+}
+
+/* ─── Settings panel bits ──────────────────────────────────────────────────── */
+
+.bb-quickactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.bb-colpresets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.bb-colpreset {
+  display: flex;
+  gap: 3px;
+  height: 36px;
+  padding: 5px;
+  border: 1px solid var(--fb-border-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+}
+.bb-colpreset span {
+  border-radius: 3px;
+  background: #d4d8de;
+}
+.bb-colpreset:hover {
+  border-color: #8a8a8a;
+}
+.bb-colpreset[aria-pressed="true"] {
+  border-color: var(--fb-green);
+  box-shadow: 0 0 0 1px var(--fb-green);
+}
+.bb-colpreset[aria-pressed="true"] span {
+  background: var(--fb-green);
+}
+
+/* ─── Post settings ────────────────────────────────────────────────────────── */
+
+.bb-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+}
+.bb-serp {
+  padding: 14px 16px;
+  border: 1px solid var(--fb-border);
+  border-radius: 10px;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+}
+.bb-serp__url {
+  color: #202124;
+  font-size: 13px;
+}
+.bb-serp__title {
+  margin: 4px 0;
+  color: #1a0dab;
+  font-size: 19px;
+  line-height: 1.3;
+}
+.bb-serp__desc {
+  color: #4d5156;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.bb-preview-frame {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  margin: 0 auto;
+  border: 1px solid var(--fb-border);
+  border-radius: 10px;
+  background: #ffffff;
+  transition: width 0.2s ease;
+}
+.bb-preview-frame--mobile {
+  width: 390px;
+  max-width: 100%;
+}
+
+@media (max-width: 1280px) {
+  .bb-guide {
+    grid-template-columns: 1fr;
+  }
+}

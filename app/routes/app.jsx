@@ -21,7 +21,8 @@ export default function App() {
           <s-link href="/app">Bulk Page Importer</s-link>
           <s-link href="/app/metaobjects">Metaobject Editor</s-link>
           <s-link href="/app/forms">Forms</s-link>
-        <s-link href="/app/submissions">Submissions</s-link>
+          <s-link href="/app/submissions">Submissions</s-link>
+          <s-link href="/app/blog">Blog Editor</s-link>
         </s-app-nav>
         <Outlet />
       </PolarisAppProvider>

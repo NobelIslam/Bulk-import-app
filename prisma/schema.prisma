@@ -93,3 +93,24 @@ model RateLimit {
   @@unique([key, bucket])
   @@index([bucket])
 }
+
+// A blog post built in the drag-and-drop blog editor. `doc` holds the block
+// tree and page design; publishing renders it to HTML and writes it to the
+// linked Shopify article.
+model BlogPost {
+  id            String    @id @default(cuid())
+  shop          String
+  title         String
+  doc           Json
+  // DRAFT | PUBLISHED
+  status        String    @default("DRAFT")
+  blogId        String?
+  articleId     String?
+  blogHandle    String?
+  articleHandle String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([shop, updatedAt])
+}
