@@ -28,6 +28,7 @@ RUN npm cache clean --force
 
 EXPOSE 3000
 
-# Database migrations run separately through Render's pre-deploy command:
-# npm run migrate
-CMD ["npm", "run", "start"]
+# Applies pending database migrations on every start, so new tables exist
+# before the app serves requests. Databases created without migration
+# history fall back to `db push`, which only adds and never drops data.
+CMD ["npm", "run", "docker-start"]
