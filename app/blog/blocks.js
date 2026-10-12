@@ -88,16 +88,18 @@ export function defaultBlockStyle() {
   };
 }
 
+export const MAX_COLUMNS = 6;
+
 function column(width = 1, blocks = []) {
-  return { id: createId("col"), width, blocks };
+  return { id: createId("col"), width, blocks, background: "", padding: 0, verticalAlign: "top" };
 }
 
 const DEFAULT_PROPS = {
   section: () => ({ children: [], backgroundImage: "", overlay: "", contentWidth: 0, minHeight: 0, verticalAlign: "top" }),
-  columns: () => ({ preset: "1-1", columns: [column(), column()], gap: 24, verticalAlign: "top" }),
+  columns: () => ({ preset: "1-1", columns: [column(), column()], gap: 24, verticalAlign: "top", stackAt: 220 }),
   heading: () => ({ text: "Your heading", level: 2, fontSize: 0, fontWeight: 700, lineHeight: 0, letterSpacing: 0, uppercase: false }),
   text: () => ({ html: "<p>Write something your readers will love. Select text to make it <strong>bold</strong>, <em>italic</em> or a link.</p>", fontSize: 0, lineHeight: 0 }),
-  image: () => ({ url: "", alt: "", width: 100, link: "", newTab: false, caption: "", aspect: "auto" }),
+  image: () => ({ url: "", alt: "", width: 100, link: "", newTab: false, caption: "", aspect: "auto", focus: "center", fit: "cover" }),
   button: () => ({ label: "Shop now", url: "/collections/all", newTab: false, variant: "solid", size: "md", color: "#111111", labelColor: "#ffffff", radius: 8, fullWidth: false }),
   video: () => ({ url: "", aspect: "16:9" }),
   quote: () => ({ html: "<p>A memorable line from your post goes here.</p>", cite: "", accent: "#111111", variant: "bar", fontSize: 0 }),
@@ -307,7 +309,7 @@ export function applyColumnPreset(block, preset) {
   if (!entry || block.type !== "columns") return block;
   const current = block.props.columns;
   const next = entry.widths.map((width, index) => {
-    if (index < current.length) return { ...current[index], width };
+    if (index < current.length) return { ...column(width), ...current[index], width };
     return column(width);
   });
   if (current.length > next.length) {
@@ -315,6 +317,84 @@ export function applyColumnPreset(block, preset) {
     next[next.length - 1] = { ...next[next.length - 1], blocks: [...next[next.length - 1].blocks, ...overflow] };
   }
   return { ...block, props: { ...block.props, preset, columns: next } };
+}
+
+// Column widths as percentages of the row (they're stored as flex weights).
+export function columnPercents(block) {
+  const total = block.props.columns.reduce((sum, col) => sum + col.width, 0) || 1;
+  return block.props.columns.map((col) => (col.width / total) * 100);
+}
+
+const round1 = (value) => Math.round(value * 10) / 10;
+
+// Sets one column to `percent` of the row; the others share the rest in
+// their current proportions.
+export function setColumnWidth(block, index, percent) {
+  const percents = columnPercents(block);
+  const count = percents.length;
+  if (count < 2) return block;
+  const min = 5;
+  const target = Math.min(100 - min * (count - 1), Math.max(min, percent));
+  const othersTotal = percents.reduce((sum, value, i) => (i === index ? sum : sum + value), 0) || 1;
+  const next = percents.map((value, i) => (i === index ? target : Math.max(min, (value / othersTotal) * (100 - target))));
+  return {
+    ...block,
+    props: {
+      ...block.props,
+      preset: "custom",
+      columns: block.props.columns.map((col, i) => ({ ...col, width: round1(next[i]) })),
+    },
+  };
+}
+
+// Drag-resize between two neighbouring columns: `fraction` is the left
+// column's share of the pair.
+export function resizeColumnPair(block, leftIndex, fraction) {
+  const cols = block.props.columns;
+  if (leftIndex < 0 || leftIndex >= cols.length - 1) return block;
+  const percents = columnPercents(block);
+  const pair = percents[leftIndex] + percents[leftIndex + 1];
+  const f = Math.min(0.92, Math.max(0.08, fraction));
+  const next = [...percents];
+  next[leftIndex] = pair * f;
+  next[leftIndex + 1] = pair * (1 - f);
+  return {
+    ...block,
+    props: { ...block.props, preset: "custom", columns: cols.map((col, i) => ({ ...col, width: round1(next[i]) })) },
+  };
+}
+
+export function addColumn(block) {
+  if (block.props.columns.length >= MAX_COLUMNS) return block;
+  const percents = columnPercents(block);
+  const share = 100 / (percents.length + 1);
+  const scaled = percents.map((value) => (value * (100 - share)) / 100);
+  return {
+    ...block,
+    props: {
+      ...block.props,
+      preset: "custom",
+      columns: [...block.props.columns.map((col, i) => ({ ...col, width: round1(scaled[i]) })), column(round1(share))],
+    },
+  };
+}
+
+// Removing a column moves its elements into the column before it.
+export function removeColumn(block, index) {
+  const cols = block.props.columns;
+  if (cols.length <= 1) return block;
+  const target = index === 0 ? 1 : index - 1;
+  const next = cols
+    .map((col, i) => (i === target ? { ...col, blocks: index === 0 ? [...cols[0].blocks, ...col.blocks] : [...col.blocks, ...cols[index].blocks] } : col))
+    .filter((_, i) => i !== index);
+  return { ...block, props: { ...block.props, preset: "custom", columns: next } };
+}
+
+export function updateColumn(block, index, patch) {
+  return {
+    ...block,
+    props: { ...block.props, columns: block.props.columns.map((col, i) => (i === index ? { ...col, ...patch } : col)) },
+  };
 }
 
 // ─── Layout presets (palette "Ready-made layouts") ───────────────────────────
@@ -502,17 +582,24 @@ const NORMALIZE_PROPS = {
     verticalAlign: oneOf(p.verticalAlign, ["top", "center", "bottom"], "top"),
   }),
   columns: (p, ctx) => {
-    const preset = oneOf(p.preset, COLUMN_PRESETS.map((entry) => entry.value), "1-1");
-    const widths = COLUMN_PRESETS.find((entry) => entry.value === preset).widths;
-    const raw = Array.isArray(p.columns) ? p.columns : [];
+    const preset = oneOf(p.preset, ["custom", ...COLUMN_PRESETS.map((entry) => entry.value)], "1-1");
+    const raw = (Array.isArray(p.columns) ? p.columns : []).slice(0, MAX_COLUMNS);
+    const widths =
+      preset === "custom"
+        ? (raw.length ? raw : [{}, {}]).map((col) => Math.round(clampNum(col?.width, 1, 1000, 1) * 10) / 10)
+        : COLUMN_PRESETS.find((entry) => entry.value === preset).widths;
     return {
       preset,
       gap: Math.round(clampNum(p.gap, 0, 120, 24)),
       verticalAlign: oneOf(p.verticalAlign, ["top", "center", "bottom"], "top"),
+      stackAt: Math.round(clampNum(p.stackAt, 0, 600, 220)),
       columns: widths.map((width, index) => ({
         id: typeof raw[index]?.id === "string" && raw[index].id ? raw[index].id.slice(0, 60) : createId("col"),
         width,
         blocks: normalizeList(raw[index]?.blocks, ctx),
+        background: sanitizeColor(raw[index]?.background),
+        padding: Math.round(clampNum(raw[index]?.padding, 0, 120, 0)),
+        verticalAlign: oneOf(raw[index]?.verticalAlign, ["top", "center", "bottom"], "top"),
       })),
     };
   },
@@ -537,7 +624,9 @@ const NORMALIZE_PROPS = {
     link: sanitizeUrl(p.link),
     newTab: p.newTab === true,
     caption: str(p.caption, 500),
-    aspect: oneOf(p.aspect, ["auto", "1:1", "4:3", "3:2", "16:9", "3:4"], "auto"),
+    aspect: oneOf(p.aspect, ["auto", "1:1", "4:3", "3:2", "16:9", "21:9", "3:4", "4:5", "2:3", "9:16"], "auto"),
+    focus: oneOf(p.focus, ["center", "top", "bottom", "left", "right"], "center"),
+    fit: oneOf(p.fit, ["cover", "contain"], "cover"),
   }),
   button: (p) => ({
     label: str(p.label, 120),
@@ -746,24 +835,32 @@ export function sectionInnerStyle(block, design) {
 }
 
 export function columnsStyle(block) {
+  const anyAligned = block.props.columns.some((col) => col.verticalAlign && col.verticalAlign !== "top");
   return {
     ...wrapperStyle(block),
     display: "flex",
-    flexWrap: "wrap",
+    flexWrap: block.props.stackAt ? "wrap" : "nowrap",
     gap: px(block.props.gap),
-    alignItems: ALIGN_FLEX[block.props.verticalAlign],
+    // Columns aligned individually need equal heights to align inside.
+    alignItems: anyAligned ? "stretch" : ALIGN_FLEX[block.props.verticalAlign],
   };
 }
 
 // Columns keep their ratio when there's room and wrap onto new rows (stack)
 // once each would be narrower than 220px, so no media queries are needed.
-export function columnStyle(col, design) {
+export function columnStyle(col, design, block) {
+  const stackAt = block ? block.props.stackAt : 220;
   return {
     flex: `${col.width} 1 0`,
-    minWidth: "min(220px, 100%)",
+    minWidth: stackAt ? `min(${stackAt}px, 100%)` : "0",
     display: "flex",
     flexDirection: "column",
+    justifyContent: col.verticalAlign && col.verticalAlign !== "top" ? ALIGN_FLEX[col.verticalAlign] : undefined,
     gap: px(design.blockGap),
+    background: col.background || undefined,
+    padding: col.padding ? px(col.padding) : undefined,
+    borderRadius: col.background && block?.style.borderRadius ? px(block.style.borderRadius) : undefined,
+    boxSizing: "border-box",
   };
 }
 
@@ -800,7 +897,10 @@ function colorLinks(html, color) {
 }
 
 const HEADING_SIZES = { 1: 40, 2: 32, 3: 26, 4: 21, 5: 18, 6: 16 };
-const ASPECTS = { "1:1": "1 / 1", "4:3": "4 / 3", "3:2": "3 / 2", "16:9": "16 / 9", "3:4": "3 / 4", "9:16": "9 / 16" };
+const ASPECTS = {
+  "1:1": "1 / 1", "4:3": "4 / 3", "3:2": "3 / 2", "16:9": "16 / 9", "21:9": "21 / 9",
+  "3:4": "3 / 4", "4:5": "4 / 5", "2:3": "2 / 3", "9:16": "9 / 16",
+};
 const BUTTON_SIZES = { sm: "8px 16px", md: "12px 24px", lg: "16px 32px" };
 const BUTTON_FONT = { sm: "14px", md: "16px", lg: "18px" };
 const LIST_ICONS = { check: "✓", dot: "•", arrow: "→", star: "★" };
@@ -865,7 +965,8 @@ export function renderLeaf(block, design, { editor = false } = {}) {
         width: "100%",
         height: p.aspect === "auto" ? "auto" : "100%",
         aspectRatio: p.aspect === "auto" ? undefined : ASPECTS[p.aspect],
-        objectFit: p.aspect === "auto" ? undefined : "cover",
+        objectFit: p.aspect === "auto" ? undefined : p.fit || "cover",
+        objectPosition: p.aspect === "auto" || !p.focus || p.focus === "center" ? undefined : p.focus,
         borderRadius: block.style.borderRadius ? px(block.style.borderRadius) : undefined,
       })}">`;
       const linked = p.link ? `<a href="${attr(p.link)}"${linkTarget(p.newTab)}>${img}</a>` : img;
@@ -952,7 +1053,7 @@ function renderBlock(block, design) {
   }
   if (block.type === "columns") {
     const cols = block.props.columns
-      .map((col) => `<div style="${cssText(columnStyle(col, design))}">${col.blocks.map((child) => renderBlock(child, design)).join("")}</div>`)
+      .map((col) => `<div style="${cssText(columnStyle(col, design, block))}">${col.blocks.map((child) => renderBlock(child, design)).join("")}</div>`)
       .join("");
     return `<div style="${cssText(columnsStyle(block))}">${cols}</div>`;
   }

@@ -1,6 +1,18 @@
 import { Button, ButtonGroup, RangeSlider, Select, TextField } from "@shopify/polaris";
 import { ArrowDownIcon, ArrowUpIcon, DeleteIcon, DuplicateIcon, PlusIcon, XIcon } from "@shopify/polaris-icons";
-import { applyColumnPreset, COLUMN_PRESETS, FONT_FAMILIES, getBlockType, SPACING_SIDES } from "../../blog/blocks";
+import {
+  addColumn,
+  applyColumnPreset,
+  COLUMN_PRESETS,
+  columnPercents,
+  FONT_FAMILIES,
+  getBlockType,
+  MAX_COLUMNS,
+  removeColumn,
+  setColumnWidth,
+  SPACING_SIDES,
+  updateColumn,
+} from "../../blog/blocks";
 import { AlignmentPicker, ColorField, ImagePicker, RichTextEditor } from "../forms/ContentControls";
 import { Section, Switch } from "../forms/FieldSettings";
 import { BlockIcon } from "./BlockPalette";
@@ -73,12 +85,16 @@ function SpacingRow({ kind, values, onChange }) {
 }
 
 const ASPECT_OPTIONS = [
-  { label: "Original", value: "auto" },
+  { label: "Original shape", value: "auto" },
   { label: "Square (1:1)", value: "1:1" },
   { label: "Landscape (4:3)", value: "4:3" },
-  { label: "Photo (3:2)", value: "3:2" },
-  { label: "Wide (16:9)", value: "16:9" },
+  { label: "Landscape photo (3:2)", value: "3:2" },
+  { label: "Widescreen (16:9)", value: "16:9" },
+  { label: "Banner (21:9)", value: "21:9" },
   { label: "Portrait (3:4)", value: "3:4" },
+  { label: "Portrait (4:5)", value: "4:5" },
+  { label: "Portrait photo (2:3)", value: "2:3" },
+  { label: "Tall / story (9:16)", value: "9:16" },
 ];
 const VALIGN = [
   { label: "Top", value: "top" },
@@ -102,11 +118,12 @@ function ContentFields({ block, setProps, onUpdate, onError }) {
           {Boolean(p.minHeight) && <Segmented label="Content position" value={p.verticalAlign} options={VALIGN} onChange={(verticalAlign) => setProps({ verticalAlign })} />}
         </>
       );
-    case "columns":
+    case "columns": {
+      const percents = columnPercents(block);
       return (
         <>
           <div>
-            <span className="fb-field-label">Column layout</span>
+            <span className="fb-field-label">Quick layouts</span>
             <div className="bb-colpresets">
               {COLUMN_PRESETS.map((preset) => (
                 <button
@@ -123,12 +140,87 @@ function ContentFields({ block, setProps, onUpdate, onError }) {
                 </button>
               ))}
             </div>
-            <p className="fb-help">Columns sit side by side on wide screens and stack on phones. Content is kept when you change the layout.</p>
           </div>
+
+          <div>
+            <span className="fb-field-label">
+              {`${p.columns.length} column${p.columns.length === 1 ? "" : "s"}`}
+              {p.preset === "custom" ? " · custom widths" : ""}
+            </span>
+            <div className="bb-colbar" aria-hidden="true">
+              {percents.map((value, index) => (
+                <span key={p.columns[index].id} style={{ flex: value }}>
+                  {Math.round(value)}%
+                </span>
+              ))}
+            </div>
+            <div className="bb-quickactions" style={{ marginTop: 8 }}>
+              <Button icon={PlusIcon} disabled={p.columns.length >= MAX_COLUMNS} onClick={() => onUpdate((current) => addColumn(current))}>
+                Add column
+              </Button>
+            </div>
+            <p className="fb-help">Tip: select the columns on the page and drag the handles between them to resize.</p>
+          </div>
+
+          {p.columns.map((col, index) => (
+            <div key={col.id} className="fb-subcard">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span className="fb-subcard__title">{`Column ${index + 1}`}</span>
+                <Button
+                  icon={DeleteIcon}
+                  variant="tertiary"
+                  tone="critical"
+                  accessibilityLabel={`Remove column ${index + 1}`}
+                  disabled={p.columns.length <= 1}
+                  onClick={() => onUpdate((current) => removeColumn(current, index))}
+                />
+              </div>
+              {p.columns.length > 1 && (
+                <Slider
+                  label="Width"
+                  min={5}
+                  max={95}
+                  unit="%"
+                  value={Math.round(percents[index])}
+                  onChange={(value) => onUpdate((current) => setColumnWidth(current, index, value), `col-width-${index}`)}
+                />
+              )}
+              <Segmented
+                label="Content position"
+                value={col.verticalAlign}
+                options={VALIGN}
+                onChange={(verticalAlign) => onUpdate((current) => updateColumn(current, index, { verticalAlign }))}
+              />
+              <ColorField
+                label="Background"
+                value={col.background}
+                placeholder="None"
+                onChange={(background) => onUpdate((current) => updateColumn(current, index, { background }), `col-bg-${index}`)}
+              />
+              <Slider
+                label="Inside spacing"
+                min={0}
+                max={80}
+                value={col.padding}
+                onChange={(padding) => onUpdate((current) => updateColumn(current, index, { padding }), `col-pad-${index}`)}
+              />
+            </div>
+          ))}
+
           <Slider label="Space between columns" min={0} max={120} value={p.gap} onChange={(gap) => setProps({ gap })} />
-          <Segmented label="Align columns" value={p.verticalAlign} options={VALIGN} onChange={(verticalAlign) => setProps({ verticalAlign })} />
+          <Slider
+            label="Stack on small screens below"
+            min={0}
+            max={480}
+            step={10}
+            value={p.stackAt}
+            zeroLabel="Never"
+            helpText="Each column keeps at least this width; when there isn't room, columns stack. Choose Never to keep them side by side on phones."
+            onChange={(stackAt) => setProps({ stackAt })}
+          />
         </>
       );
+    }
     case "heading":
       return (
         <>
@@ -167,6 +259,34 @@ function ContentFields({ block, setProps, onUpdate, onError }) {
           <TextField label="Alt text" value={p.alt} autoComplete="off" helpText="Describe the image for screen readers and search engines." onChange={(alt) => setProps({ alt })} />
           <Slider label="Width" min={10} max={100} unit="%" value={p.width} onChange={(width) => setProps({ width })} />
           <Select label="Shape" options={ASPECT_OPTIONS} value={p.aspect} onChange={(aspect) => setProps({ aspect })} />
+          {p.aspect !== "auto" && (
+            <>
+              <Segmented
+                label="Fit"
+                value={p.fit}
+                options={[
+                  { label: "Fill (crop)", value: "cover" },
+                  { label: "Show whole image", value: "contain" },
+                ]}
+                onChange={(fit) => setProps({ fit })}
+              />
+              {p.fit === "cover" && (
+                <Select
+                  label="Keep in view"
+                  helpText="Which part of the image stays visible when it's cropped."
+                  options={[
+                    { label: "Center", value: "center" },
+                    { label: "Top", value: "top" },
+                    { label: "Bottom", value: "bottom" },
+                    { label: "Left", value: "left" },
+                    { label: "Right", value: "right" },
+                  ]}
+                  value={p.focus}
+                  onChange={(focus) => setProps({ focus })}
+                />
+              )}
+            </>
+          )}
           <TextField label="Caption" value={p.caption} autoComplete="off" onChange={(caption) => setProps({ caption })} />
           <TextField label="Link (optional)" value={p.link} autoComplete="off" placeholder="/products/... or https://..." onChange={(link) => setProps({ link })} />
           {p.link && <Switch label="Open link in a new tab" checked={p.newTab} onChange={(newTab) => setProps({ newTab })} />}

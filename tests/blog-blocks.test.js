@@ -107,3 +107,40 @@ test("video links become embed URLs", () => {
   assert.equal(videoEmbedUrl("https://vimeo.com/76979871"), "https://player.vimeo.com/video/76979871");
   assert.equal(videoEmbedUrl("https://example.com/v"), "");
 });
+
+test("column widths: set, resize, add and remove keep a 100% row", async () => {
+  const { addColumn, columnPercents, normalizeDoc, removeColumn, renderDocHtml, resizeColumnPair, setColumnWidth } = await import("../app/blog/blocks.js");
+  const sum = (block) => Math.round(columnPercents(block).reduce((a, b) => a + b, 0));
+  let cols = getLayoutPreset("features").build();
+
+  cols = setColumnWidth(cols, 0, 50);
+  assert.equal(cols.props.preset, "custom");
+  assert.equal(Math.round(columnPercents(cols)[0]), 50);
+  assert.equal(Math.round(columnPercents(cols)[1]), 25);
+  assert.equal(sum(cols), 100);
+
+  cols = resizeColumnPair(cols, 1, 0.8);
+  assert.equal(Math.round(columnPercents(cols)[0]), 50);
+  assert.equal(Math.round(columnPercents(cols)[1]), 40);
+  assert.equal(sum(cols), 100);
+
+  cols = addColumn(cols);
+  assert.equal(cols.props.columns.length, 4);
+  assert.equal(sum(cols), 100);
+
+  const before = countBlocks([cols]);
+  cols = removeColumn(cols, 1);
+  assert.equal(cols.props.columns.length, 3);
+  assert.equal(countBlocks([cols]), before);
+
+  // Custom widths, per-column look and stacking survive a save and render.
+  cols.props.columns[0].background = "#ff0000";
+  cols.props.columns[0].verticalAlign = "center";
+  cols.props.stackAt = 0;
+  const saved = normalizeDoc(JSON.parse(JSON.stringify({ blocks: [cols] })));
+  assert.deepEqual(saved.blocks[0].props.columns.map((col) => col.width), cols.props.columns.map((col) => col.width));
+  const html = renderDocHtml(saved);
+  assert.match(html, /flex-wrap:nowrap/);
+  assert.match(html, /background:#ff0000/);
+  assert.match(html, /justify-content:center/);
+});

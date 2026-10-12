@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { Button, ButtonGroup, ColorPicker, DropZone, Popover, Select, TextField, Tooltip } from "@shopify/polaris";
+import { Button, ButtonGroup, ColorPicker, DropZone, Modal, Popover, Select, Spinner, TextField, Tooltip } from "@shopify/polaris";
 import {
   LinkIcon,
   ListBulletedIcon,
@@ -231,25 +231,33 @@ function JustifyIcon(props) {
 
 // ─── Image picker ────────────────────────────────────────────────────────────
 
-// URL field plus an upload button that stores the file in Shopify Files.
-export function ImagePicker({ label = "Image", value, onChange, onError }) {
-  const fetcher = useFetcher();
-  const uploading = fetcher.state !== "idle";
+const IMAGE_TYPES = "image/png,image/jpeg,image/gif,image/webp,image/svg+xml";
 
+function useImageUpload(onUploaded, onError) {
+  const fetcher = useFetcher();
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
-    if (fetcher.data.ok) onChange(fetcher.data.url);
+    if (fetcher.data.ok) onUploaded(fetcher.data.url);
     else onError?.(fetcher.data.message);
-    // Only react to a finished upload, not to onChange identity changes.
+    // Only react to a finished upload, not to callback identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data]);
-
-  const upload = (file) => {
-    if (!file) return;
-    const data = new FormData();
-    data.append("file", file);
-    fetcher.submit(data, { method: "post", action: "/app/forms/upload", encType: "multipart/form-data" });
+  return {
+    uploading: fetcher.state !== "idle",
+    upload: (file) => {
+      if (!file) return;
+      const data = new FormData();
+      data.append("file", file);
+      fetcher.submit(data, { method: "post", action: "/app/forms/upload", encType: "multipart/form-data" });
+    },
   };
+}
+
+// Image field: pick from the store's Shopify Files (with upload), drop a file
+// straight onto it, or paste a URL.
+export function ImagePicker({ label = "Image", value, onChange, onError }) {
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const { uploading, upload } = useImageUpload(onChange, onError);
 
   return (
     <div className="fb-image-picker">
@@ -257,20 +265,21 @@ export function ImagePicker({ label = "Image", value, onChange, onError }) {
       {value ? (
         <div className="fb-image-picker__preview">
           <img src={value} alt="" />
-          <Button icon={XIcon} variant="tertiary" accessibilityLabel="Remove image" onClick={() => onChange("")} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <Button size="slim" onClick={() => setLibraryOpen(true)}>
+              Change
+            </Button>
+            <Button icon={XIcon} size="slim" variant="tertiary" accessibilityLabel="Remove image" onClick={() => onChange("")} />
+          </div>
         </div>
       ) : (
-        <DropZone
-          accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-          type="image"
-          allowMultiple={false}
-          disabled={uploading}
-          onDrop={(_files, accepted) => upload(accepted[0])}
-        >
-          <DropZone.FileUpload
-            actionTitle={uploading ? "Uploading…" : "Upload image"}
-            actionHint="or drop an image here"
-          />
+        <DropZone accept={IMAGE_TYPES} type="image" allowMultiple={false} disabled={uploading} onDrop={(_files, accepted) => upload(accepted[0])} onClick={() => {}}>
+          <div className="fb-image-picker__empty">
+            <Button variant="primary" loading={uploading} onClick={() => setLibraryOpen(true)}>
+              Choose image
+            </Button>
+            <span>{uploading ? "Uploading to Shopify Files…" : "From your Shopify files, or drop an image here"}</span>
+          </div>
         </DropZone>
       )}
       <div style={{ marginTop: 8 }}>
@@ -283,7 +292,129 @@ export function ImagePicker({ label = "Image", value, onChange, onError }) {
           onChange={onChange}
         />
       </div>
+      <MediaLibrary
+        open={libraryOpen}
+        current={value}
+        onClose={() => setLibraryOpen(false)}
+        onSelect={(url) => {
+          onChange(url);
+          setLibraryOpen(false);
+        }}
+        onError={onError}
+      />
     </div>
+  );
+}
+
+// Browse Content > Files: search, load more, upload new images.
+export function MediaLibrary({ open, current, onClose, onSelect, onError }) {
+  const fetcher = useFetcher();
+  const [query, setQuery] = useState("");
+  const [files, setFiles] = useState([]);
+  const [cursor, setCursor] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const appendRef = useRef(false);
+  const { uploading, upload } = useImageUpload((url) => {
+    setFiles((list) => [{ id: url, url, alt: "" }, ...list]);
+    setSelected(url);
+  }, onError);
+
+  const load = (search, after = null) => {
+    appendRef.current = Boolean(after);
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (after) params.set("after", after);
+    fetcher.load(`/app/media?${params.toString()}`);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    setSelected(current || null);
+    load(query);
+    // Reload each time the library opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const timer = setTimeout(() => load(query), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+    if (!fetcher.data.ok) {
+      onError?.(fetcher.data.message);
+      return;
+    }
+    setFiles((list) => (appendRef.current ? [...list, ...fetcher.data.files] : fetcher.data.files));
+    setCursor(fetcher.data.nextCursor);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.state, fetcher.data]);
+
+  const loading = fetcher.state !== "idle";
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Choose an image"
+      size="large"
+      primaryAction={{ content: "Use image", disabled: !selected, onAction: () => onSelect(selected) }}
+      secondaryActions={[{ content: "Cancel", onAction: onClose }]}
+    >
+      <Modal.Section>
+        <div className="fb-media">
+          <div className="fb-media__toolbar">
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Search files"
+                labelHidden
+                placeholder="Search your Shopify files"
+                value={query}
+                onChange={setQuery}
+                autoComplete="off"
+                clearButton
+                onClearButtonClick={() => setQuery("")}
+              />
+            </div>
+          </div>
+          <DropZone accept={IMAGE_TYPES} type="image" allowMultiple={false} disabled={uploading} onDrop={(_files, accepted) => upload(accepted[0])}>
+            <DropZone.FileUpload actionTitle={uploading ? "Uploading…" : "Upload new image"} actionHint="Saved to Content → Files in Shopify" />
+          </DropZone>
+          {files.length === 0 && !loading ? (
+            <p className="fb-help" style={{ textAlign: "center", padding: 24 }}>
+              {query ? "No images match your search." : "No images in your Shopify files yet. Upload one above."}
+            </p>
+          ) : (
+            <div className="fb-media__grid" role="listbox" aria-label="Images">
+              {files.map((file) => (
+                <button
+                  key={file.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected === file.url}
+                  className="fb-media__item"
+                  title={file.alt || file.url.split("/").pop().split("?")[0]}
+                  onClick={() => setSelected(file.url)}
+                  onDoubleClick={() => onSelect(file.url)}
+                >
+                  <img src={`${file.url}${file.url.includes("?") ? "&" : "?"}width=240`} alt={file.alt} loading="lazy" />
+                </button>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "center", minHeight: 36 }}>
+            {loading ? (
+              <Spinner size="small" accessibilityLabel="Loading images" />
+            ) : (
+              cursor && <Button onClick={() => load(query, cursor)}>Load more</Button>
+            )}
+          </div>
+        </div>
+      </Modal.Section>
+    </Modal>
   );
 }
 

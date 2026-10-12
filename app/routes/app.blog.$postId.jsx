@@ -31,6 +31,7 @@ import {
 import { authenticate } from "../shopify.server";
 import { getPost, listBlogs, publishPost, savePost, unpublishPost } from "../blog/blog.server";
 import {
+  columnPercents,
   columnsStyle,
   columnStyle,
   containerIdsWithin,
@@ -47,6 +48,7 @@ import {
   removeBlock,
   renderDocHtml,
   renderLeaf,
+  resizeColumnPair,
   ROOT,
   sectionInnerStyle,
   sectionStyle,
@@ -370,12 +372,13 @@ export default function BlogEditor() {
       design: doc.design,
       selectedId,
       drag: activeDrag,
+      onUpdateBlock: (id, updater, key) => update((current) => ({ ...current, blocks: updateBlock(current.blocks, id, updater) }), key),
       onSelect: (id) => {
         select(id);
         setTab((current) => (current === "settings" ? "build" : current));
       },
     }),
-    [doc.design, selectedId, activeDrag, select],
+    [doc.design, selectedId, activeDrag, select, update],
   );
 
   return (
@@ -669,11 +672,23 @@ function BlockView({ block, ctx }) {
       </div>
     );
   } else if (block.type === "columns") {
+    const percents = columnPercents(block);
     content = (
       <div style={columnsStyle(block)}>
-        {block.props.columns.map((col) => (
-          <div key={col.id} className="bb-col" style={columnStyle(col, ctx.design)}>
+        {block.props.columns.map((col, index) => (
+          <div key={col.id} className="bb-col" style={{ ...columnStyle(col, ctx.design, block), position: "relative" }}>
             <BlockList containerId={col.id} blocks={col.blocks} ctx={ctx} inColumn />
+            {index < block.props.columns.length - 1 && !ctx.drag && (
+              <ColumnResizer
+                block={block}
+                index={index}
+                percent={percents[index]}
+                pairPercent={percents[index] + percents[index + 1]}
+                gap={block.props.gap}
+                onResize={(fraction) => ctx.onUpdateBlock(block.id, (current) => resizeColumnPair(current, index, fraction), `resize-${block.id}-${index}`)}
+                onSelect={() => ctx.onSelect(block.id)}
+              />
+            )}
           </div>
         ))}
       </div>
@@ -720,6 +735,74 @@ function BlockView({ block, ctx }) {
         </button>
       </div>
       {content}
+    </div>
+  );
+}
+
+// Drag handle on the edge between two columns. It measures the pair on the
+// page and turns the pointer position into the left column's share.
+function ColumnResizer({ index, percent, pairPercent, gap, onResize, onSelect }) {
+  const ref = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const start = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const left = ref.current?.parentElement;
+    const right = left?.nextElementSibling;
+    if (!left || !right) return;
+    // Stacked columns (one under the other) can't be resized sideways.
+    if (Math.abs(left.getBoundingClientRect().top - right.getBoundingClientRect().top) > 4) return;
+    onSelect();
+    setDragging(true);
+    const move = (moveEvent) => {
+      const a = left.getBoundingClientRect();
+      const b = right.getBoundingClientRect();
+      const span = b.right - a.left - gap;
+      if (span <= 0) return;
+      onResize((moveEvent.clientX - a.left - gap / 2) / span);
+    };
+    const stop = () => {
+      setDragging(false);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  };
+
+  // Arrow keys move the edge 2% at a time (Shift: 10%).
+  const nudge = (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = (event.shiftKey ? 10 : 2) * (event.key === "ArrowLeft" ? -1 : 1);
+    onResize((percent + step) / pairPercent);
+  };
+
+  return (
+    // A focusable window splitter: drag with the pointer, or Tab to it and use arrow keys.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex
+    <div
+      ref={ref}
+      className={`bb-resizer${dragging ? " bb-resizer--active" : ""}`}
+      style={{ right: -(gap / 2) - 8 }}
+      role="separator"
+      // A focusable separator is the ARIA window-splitter pattern.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+      aria-orientation="vertical"
+      aria-valuenow={Math.round(percent)}
+      aria-valuemin={5}
+      aria-valuemax={95}
+      aria-label={`Resize column ${index + 1} (arrow keys)`}
+      title="Drag to resize columns"
+      onPointerDown={start}
+      onKeyDown={nudge}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <span className="bb-resizer__grip" />
+      {dragging && <span className="bb-resizer__label">{Math.round(percent)}%</span>}
     </div>
   );
 }
