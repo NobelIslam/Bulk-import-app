@@ -446,8 +446,18 @@ export function DesignPanel({ design, onChange }) {
           value={design.fontFamily}
           onChange={(fontFamily) => onChange({ fontFamily })}
         />
-        <Slider label="Text size" min={12} max={26} value={design.fontSize} onChange={(fontSize) => onChange({ fontSize })} />
-        <Slider label="Line height" min={1} max={2.4} step={0.05} unit="" value={design.lineHeight} onChange={(lineHeight) => onChange({ lineHeight })} />
+        <Switch
+          label="Use my theme's text styles"
+          description="Text and heading sizes follow your theme, like posts written in Shopify."
+          checked={!design.fontSize}
+          onChange={(theme) => onChange(theme ? { fontSize: 0, lineHeight: 0 } : { fontSize: 17, lineHeight: 1.7 })}
+        />
+        {Boolean(design.fontSize) && (
+          <>
+            <Slider label="Text size" min={12} max={26} value={design.fontSize} onChange={(fontSize) => onChange({ fontSize })} />
+            <Slider label="Line height" min={1} max={2.4} step={0.05} unit="" value={design.lineHeight || 1.7} onChange={(lineHeight) => onChange({ lineHeight })} />
+          </>
+        )}
       </Section>
       <Section title="Colors" defaultOpen>
         <ColorField label="Text" value={design.textColor} placeholder="Theme default" onChange={(textColor) => onChange({ textColor })} />

@@ -609,8 +609,9 @@ export function normalizeDesign(raw) {
   return {
     contentWidth: Math.round(clampNum(source.contentWidth, 0, 2400, base.contentWidth)),
     fontFamily: oneOf(source.fontFamily, FONT_FAMILIES.map((entry) => entry.value), base.fontFamily),
-    fontSize: Math.round(clampNum(source.fontSize, 10, 32, base.fontSize)),
-    lineHeight: clampNum(source.lineHeight, 1, 3, base.lineHeight),
+    // 0 means "use the theme's", as imported articles do.
+    fontSize: Number(source.fontSize) === 0 ? 0 : Math.round(clampNum(source.fontSize, 10, 32, base.fontSize)),
+    lineHeight: Number(source.lineHeight) === 0 ? 0 : clampNum(source.lineHeight, 1, 3, base.lineHeight),
     textColor: sanitizeColor(source.textColor),
     headingColor: sanitizeColor(source.headingColor),
     linkColor: sanitizeColor(source.linkColor),
@@ -772,8 +773,8 @@ export function pageStyle(design) {
     maxWidth: design.contentWidth ? px(design.contentWidth) : undefined,
     margin: "0 auto",
     fontFamily: font && font.value !== "inherit" ? font.stack : undefined,
-    fontSize: px(design.fontSize),
-    lineHeight: String(design.lineHeight),
+    fontSize: design.fontSize ? px(design.fontSize) : undefined,
+    lineHeight: design.lineHeight ? String(design.lineHeight) : undefined,
     color: design.textColor || undefined,
     background: design.background || undefined,
     padding: design.background ? "24px" : undefined,
@@ -836,11 +837,13 @@ export function renderLeaf(block, design, { editor = false } = {}) {
   switch (block.type) {
     case "heading": {
       const tag = `h${p.level}`;
+      // With theme typography, headings without their own size keep the theme's.
+      const themeType = !design.fontSize && !p.fontSize;
       const style = cssText({
         margin: "0",
-        fontSize: px(p.fontSize || HEADING_SIZES[p.level]),
-        fontWeight: String(p.fontWeight),
-        lineHeight: p.lineHeight ? String(p.lineHeight) : "1.25",
+        fontSize: p.fontSize ? px(p.fontSize) : themeType ? undefined : px(HEADING_SIZES[p.level]),
+        fontWeight: themeType && p.fontWeight === 700 ? undefined : String(p.fontWeight),
+        lineHeight: p.lineHeight ? String(p.lineHeight) : themeType ? undefined : "1.25",
         letterSpacing: p.letterSpacing ? px(p.letterSpacing) : undefined,
         textTransform: p.uppercase ? "uppercase" : undefined,
         color: block.style.textColor || design.headingColor || undefined,

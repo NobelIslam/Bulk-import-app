@@ -232,3 +232,70 @@ export async function deletePost(admin, shop, id, { deleteArticle = false } = {}
   await db.blogPost.deleteMany({ where: { id, shop } });
   return { ok: true, message: deleteArticle ? "Post and Shopify article deleted." : "Post deleted from the editor." };
 }
+
+// ─── Existing Shopify articles ───────────────────────────────────────────────
+
+// Recent articles across all blogs, newest edit first.
+export async function listArticles(admin, { max = 250 } = {}) {
+  const articles = [];
+  let after = null;
+  do {
+    const data = await gql(
+      admin,
+      `#graphql
+      query BlogEditorArticles($after: String) {
+        articles(first: 100, after: $after, sortKey: UPDATED_AT, reverse: true) {
+          nodes { id title handle isPublished updatedAt blog { id title handle } }
+          pageInfo { hasNextPage endCursor }
+        }
+      }`,
+      { after },
+    );
+    articles.push(...data.articles.nodes);
+    after = data.articles.pageInfo.hasNextPage ? data.articles.pageInfo.endCursor : null;
+  } while (after && articles.length < max);
+  return { articles: articles.slice(0, max), truncated: Boolean(after) };
+}
+
+export async function getArticle(admin, id) {
+  const data = await gql(
+    admin,
+    `#graphql
+    query BlogEditorArticle($id: ID!) {
+      article(id: $id) {
+        id title handle body summary tags isPublished
+        image { url altText }
+        author { name }
+        blog { id handle }
+        seoTitle: metafield(namespace: "global", key: "title_tag") { value }
+        seoDescription: metafield(namespace: "global", key: "description_tag") { value }
+      }
+    }`,
+    { id },
+  );
+  return data.article;
+}
+
+// Links an existing article to a new editor post. If one already exists for
+// the article, that post is returned instead of creating a duplicate.
+export async function importArticle(admin, shop, articleId, rawDoc) {
+  const existing = await db.blogPost.findFirst({ where: { shop, articleId } });
+  if (existing) return existing;
+  const article = await getArticle(admin, articleId);
+  if (!article) return null;
+  const doc = normalizeDoc(rawDoc);
+  doc.post.blogId = article.blog?.id || doc.post.blogId;
+  return db.blogPost.create({
+    data: {
+      shop,
+      title: doc.post.title,
+      doc,
+      status: article.isPublished ? "PUBLISHED" : "DRAFT",
+      blogId: article.blog?.id || null,
+      blogHandle: article.blog?.handle || null,
+      articleId: article.id,
+      articleHandle: article.handle,
+      publishedAt: article.isPublished ? new Date() : null,
+    },
+  });
+}

@@ -23,19 +23,24 @@ import {
 import { DeleteIcon, DuplicateIcon, EditIcon, ExternalIcon, PlusIcon } from "@shopify/polaris-icons";
 import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
-import { createPost, deletePost, duplicatePost, listBlogs, listPosts } from "../blog/blog.server";
+import { createPost, deletePost, duplicatePost, getArticle, importArticle, listArticles, listBlogs, listPosts } from "../blog/blog.server";
 import { POST_TEMPLATES } from "../blog/blocks";
+import { articleToDoc } from "../blog/import";
 
 export const loader = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
-  const [posts, shopify] = await Promise.all([
+  const [posts, shopify, shopifyArticles] = await Promise.all([
     listPosts(session.shop),
     listBlogs(admin).catch((error) => ({ blogs: [], error: error.message })),
+    listArticles(admin).catch((error) => ({ articles: [], error: error.message })),
   ]);
+  const linked = new Set(posts.map((post) => post.articleId).filter(Boolean));
   return {
     posts,
+    articles: shopifyArticles.articles.filter((article) => !linked.has(article.id)),
+    articlesTruncated: Boolean(shopifyArticles.truncated),
     blogs: shopify.blogs,
-    blogsError: shopify.error || null,
+    blogsError: shopify.error || shopifyArticles.error || null,
     storeUrl: shopify.shop?.primaryDomain?.url || `https://${session.shop}`,
   };
 };
@@ -55,6 +60,33 @@ export const action = async ({ request }) => {
   }
 
   const id = String(formData.get("id") || "");
+  // Step 1 of an import: send the article to the browser, which turns its
+  // HTML into editable elements (it has a real HTML parser).
+  if (intent === "getArticle") {
+    try {
+      const article = await getArticle(admin, id);
+      return article ? { ok: true, article } : { ok: false, message: "That article no longer exists." };
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
+  }
+  // Step 2: save the converted document linked to the article, then open it.
+  if (intent === "import") {
+    let doc = null;
+    try {
+      doc = JSON.parse(String(formData.get("doc") || "null"));
+    } catch {
+      doc = null;
+    }
+    if (!doc) return { ok: false, message: "Could not read the converted post." };
+    try {
+      const post = await importArticle(admin, session.shop, id, doc);
+      if (!post) return { ok: false, message: "That article no longer exists." };
+      return redirect(`/app/blog/${post.id}`);
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
+  }
   if (intent === "duplicate") {
     const post = await duplicatePost(session.shop, id);
     return post ? { ok: true, message: "Post duplicated." } : { ok: false, message: "Post not found." };
@@ -75,10 +107,11 @@ function formatDate(value) {
 }
 
 export default function BlogPosts() {
-  const { posts, blogs, blogsError, storeUrl } = useLoaderData();
+  const { posts, articles, articlesTruncated, blogs, blogsError, storeUrl } = useLoaderData();
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const shopify = useAppBridge();
+  const importer = useArticleImport(shopify);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const busy = fetcher.state !== "idle";
@@ -88,6 +121,8 @@ export default function BlogPosts() {
     shopify.toast.show(fetcher.data.message, { isError: !fetcher.data.ok });
     if (fetcher.data.ok) setDeleteTarget(null);
   }, [fetcher.state, fetcher.data, shopify]);
+
+  const blogTitle = (id) => blogs.find((blog) => blog.id === id)?.title || "—";
 
   const rows = posts.map((post, index) => {
     const published = post.status === "PUBLISHED";
@@ -104,6 +139,7 @@ export default function BlogPosts() {
         <IndexTable.Cell>
           <Badge tone={published ? "success" : undefined}>{published ? "Published" : post.articleId ? "Hidden" : "Draft"}</Badge>
         </IndexTable.Cell>
+        <IndexTable.Cell>{post.blogId ? blogTitle(post.blogId) : "—"}</IndexTable.Cell>
         <IndexTable.Cell>{formatDate(post.updatedAt)}</IndexTable.Cell>
         <IndexTable.Cell>
           <RowActions
@@ -151,10 +187,63 @@ export default function BlogPosts() {
             <IndexTable
               selectable={false}
               itemCount={posts.length}
-              headings={[{ title: "Post" }, { title: "Status" }, { title: "Last edited" }, { title: "Actions" }]}
+              headings={[{ title: "Post" }, { title: "Status" }, { title: "Blog" }, { title: "Last edited" }, { title: "Actions" }]}
             >
               {rows}
             </IndexTable>
+          </Card>
+        )}
+
+        {articles.length > 0 && (
+          <Card padding="0">
+            <div style={{ padding: "16px 16px 8px" }}>
+              <BlockStack gap="100">
+                <Text as="h2" variant="headingMd">
+                  Your other Shopify blog posts
+                </Text>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Posts written in Shopify. Open one in the builder to edit it with drag and drop. Publishing updates the
+                  same post and keeps its address.
+                </Text>
+              </BlockStack>
+            </div>
+            <IndexTable
+              selectable={false}
+              itemCount={articles.length}
+              headings={[{ title: "Post" }, { title: "Status" }, { title: "Blog" }, { title: "Last edited" }, { title: "Actions" }]}
+            >
+              {articles.map((article, index) => (
+                <IndexTable.Row id={article.id} key={article.id} position={index}>
+                  <IndexTable.Cell>
+                    <Text as="span" fontWeight="semibold">
+                      {article.title}
+                    </Text>
+                  </IndexTable.Cell>
+                  <IndexTable.Cell>
+                    <Badge tone={article.isPublished ? "success" : undefined}>{article.isPublished ? "Published" : "Hidden"}</Badge>
+                  </IndexTable.Cell>
+                  <IndexTable.Cell>{article.blog?.title || "—"}</IndexTable.Cell>
+                  <IndexTable.Cell>{formatDate(article.updatedAt)}</IndexTable.Cell>
+                  <IndexTable.Cell>
+                    <Button
+                      icon={EditIcon}
+                      loading={importer.activeId === article.id}
+                      disabled={Boolean(importer.activeId) && importer.activeId !== article.id}
+                      onClick={() => importer.start(article.id)}
+                    >
+                      Edit in builder
+                    </Button>
+                  </IndexTable.Cell>
+                </IndexTable.Row>
+              ))}
+            </IndexTable>
+            {articlesTruncated && (
+              <div style={{ padding: 12 }}>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Showing your 250 most recently edited posts.
+                </Text>
+              </div>
+            )}
           </Card>
         )}
       </BlockStack>
@@ -192,6 +281,48 @@ export default function BlogPosts() {
       </Modal>
     </Page>
   );
+}
+
+// Two steps: fetch the article, convert its HTML here in the browser, then
+// create the linked editor post (the server redirects into the builder).
+function useArticleImport(shopify) {
+  const loadFetcher = useFetcher();
+  const saveFetcher = useFetcher();
+  const [activeId, setActiveId] = useState(null);
+
+  useEffect(() => {
+    if (loadFetcher.state !== "idle" || !loadFetcher.data || !activeId) return;
+    const data = loadFetcher.data;
+    if (!data.ok || !data.article) {
+      shopify.toast.show(data.message || "Could not open that post.", { isError: true });
+      setActiveId(null);
+      return;
+    }
+    let doc;
+    try {
+      doc = articleToDoc(data.article);
+    } catch {
+      shopify.toast.show("Could not convert that post.", { isError: true });
+      setActiveId(null);
+      return;
+    }
+    saveFetcher.submit({ intent: "import", id: data.article.id, doc: JSON.stringify(doc) }, { method: "post" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadFetcher.state, loadFetcher.data]);
+
+  useEffect(() => {
+    if (saveFetcher.state !== "idle" || !saveFetcher.data) return;
+    if (saveFetcher.data.ok === false) shopify.toast.show(saveFetcher.data.message, { isError: true });
+    setActiveId(null);
+  }, [saveFetcher.state, saveFetcher.data, shopify]);
+
+  return {
+    activeId,
+    start: (id) => {
+      setActiveId(id);
+      loadFetcher.submit({ intent: "getArticle", id }, { method: "post" });
+    },
+  };
 }
 
 function RowActions({ disabled, liveUrl, onEdit, onDuplicate, onDelete }) {
