@@ -73,16 +73,30 @@ function isSet(value) {
   return value !== undefined && value !== null && value !== "";
 }
 
+const BOOLEAN_KEYS = STYLE_KEYS.filter((key) => typeof DEFAULT_DESKTOP_STYLE[key] === "boolean");
+
+// Older saves stored switches as the strings "true"/"false"; "false" is truthy.
+function toBoolean(value) {
+  return value === true || value === "true";
+}
+
+function coerceBooleans(style) {
+  BOOLEAN_KEYS.forEach((key) => {
+    style[key] = toBoolean(style[key]);
+  });
+  return style;
+}
+
 // Merges sparse mobile overrides over the desktop tokens for a viewport.
 export function resolveStyle(desktop, mobile, viewport) {
   const base = { ...DEFAULT_DESKTOP_STYLE, ...(desktop || {}) };
-  if (viewport !== "mobile") return base;
+  if (viewport !== "mobile") return coerceBooleans(base);
   const overrides = mobile || {};
   const merged = { ...base };
   STYLE_KEYS.forEach((key) => {
     if (isSet(overrides[key])) merged[key] = overrides[key];
   });
-  return merged;
+  return coerceBooleans(merged);
 }
 
 // Only accepts known keys and clamps every numeric value, so a hand-crafted
@@ -97,6 +111,10 @@ export function normalizeStyle(raw, base = DEFAULT_DESKTOP_STYLE) {
       const num = Number(value);
       if (!Number.isFinite(num)) return;
       out[key] = Math.min(min[1], Math.max(min[0], Math.round(num)));
+      return;
+    }
+    if (BOOLEAN_KEYS.includes(key)) {
+      out[key] = toBoolean(value);
       return;
     }
     if (ENUM_VALUES[key] && !ENUM_VALUES[key].includes(String(value))) return;
