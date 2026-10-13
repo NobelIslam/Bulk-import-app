@@ -1065,7 +1065,10 @@ function renderBlock(block, design) {
 // The article body. Everything is inline-styled, so it survives Shopify's
 // editor and theme CSS without a stylesheet.
 export function renderDocHtml(doc) {
-  const body = doc.blocks.map((block) => renderBlock(block, doc.design)).join("\n");
+  const body = doc.blocks
+    .map((block) => renderBlock(block, doc.design))
+    .filter(Boolean)
+    .join("\n");
   return `<div class="tcl-blog" style="${cssText(pageStyle(doc.design))}">\n${body}\n</div>`;
 }
 

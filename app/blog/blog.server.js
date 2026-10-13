@@ -263,7 +263,7 @@ export async function getArticle(admin, id) {
     `#graphql
     query BlogEditorArticle($id: ID!) {
       article(id: $id) {
-        id title handle body summary tags isPublished
+        id title handle body summary tags isPublished updatedAt
         image { url altText }
         author { name }
         blog { id handle }

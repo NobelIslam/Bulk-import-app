@@ -30,7 +30,8 @@ import {
   ViewIcon,
 } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
-import { getPost, listBlogs, publishPost, savePost, unpublishPost } from "../blog/blog.server";
+import { getArticle, getPost, listBlogs, publishPost, savePost, unpublishPost } from "../blog/blog.server";
+import { mergeArticleIntoDoc } from "../blog/import";
 import {
   columnPercents,
   columnsStyle,
@@ -76,9 +77,17 @@ export const loader = async ({ request, params }) => {
   const { session, admin } = await authenticate.admin(request);
   const post = await getPost(session.shop, params.postId);
   if (!post) throw new Response("Post not found", { status: 404 });
-  const shopify = await listBlogs(admin).catch((error) => ({ blogs: [], shop: null, error: error.message }));
+  const [shopify, article] = await Promise.all([
+    listBlogs(admin).catch((error) => ({ blogs: [], shop: null, error: error.message })),
+    post.articleId ? getArticle(admin, post.articleId).catch(() => null) : null,
+  ]);
+  // Edited in Shopify's own editor after the last save here (5 s of slack
+  // covers our own publish, which updates the article just before the post).
+  const changedInShopify = Boolean(article) && new Date(article.updatedAt).getTime() - new Date(post.updatedAt).getTime() > 5000;
   return {
     post,
+    article,
+    changedInShopify,
     blogs: shopify.blogs,
     blogsError: shopify.error || null,
     shopName: shopify.shop?.name || session.shop,
@@ -98,6 +107,13 @@ export const action = async ({ request, params }) => {
   }
 
   try {
+    // Fresh copy of the linked Shopify article, for "Load latest from Shopify".
+    if (intent === "fetchArticle") {
+      const post = await getPost(session.shop, params.postId);
+      if (!post?.articleId) return { ok: false, intent, message: "This post isn't on your Shopify blog yet." };
+      const article = await getArticle(admin, post.articleId);
+      return article ? { ok: true, intent, article } : { ok: false, intent, message: "The Shopify post no longer exists." };
+    }
     if (intent === "save") {
       if (!doc) return { ok: false, intent, message: "Couldn't read the post. Reload and try again." };
       const saved = await savePost(session.shop, params.postId, doc);
@@ -181,7 +197,7 @@ function parentBlockOf(blocks, id) {
 }
 
 export default function BlogEditor() {
-  const { post, blogs, blogsError, shopName, storeUrl } = useLoaderData();
+  const { post, article, changedInShopify, blogs, blogsError, shopName, storeUrl } = useLoaderData();
   const fetcher = useFetcher();
   const shopify = useAppBridge();
 
@@ -201,6 +217,26 @@ export default function BlogEditor() {
   const [pendingIntent, setPendingIntent] = useState(null);
   const sentDocRef = useRef(null);
   const prevFetcherState = useRef(fetcher.state);
+  const [showSyncBanner, setShowSyncBanner] = useState(changedInShopify);
+  const syncFetcher = useFetcher();
+
+  const loadArticle = useCallback(
+    (latest) => {
+      update((current) => mergeArticleIntoDoc(current, latest));
+      select(null);
+      setShowSyncBanner(false);
+      shopify.toast.show("Loaded the latest version from Shopify. Save or update the post to keep it.");
+    },
+    [update, select, shopify],
+  );
+
+  useEffect(() => {
+    if (syncFetcher.state !== "idle" || !syncFetcher.data) return;
+    if (syncFetcher.data.ok) loadArticle(syncFetcher.data.article);
+    else shopify.toast.show(syncFetcher.data.message, { isError: true });
+  }, [syncFetcher.state, syncFetcher.data, loadArticle, shopify]);
+
+  const pullFromShopify = () => syncFetcher.submit({ intent: "fetchArticle" }, { method: "post" });
 
   const published = post.status === "PUBLISHED";
   const liveUrl = published && post.blogHandle && post.articleHandle ? `${storeUrl}/blogs/${post.blogHandle}/${post.articleHandle}` : null;
@@ -449,6 +485,24 @@ export default function BlogEditor() {
             </div>
           </header>
 
+          {showSyncBanner && article && (
+            <div style={{ marginBottom: 16 }}>
+              <Banner
+                tone="warning"
+                title="This post was changed in Shopify's blog editor"
+                action={{ content: "Load Shopify's version", onAction: () => loadArticle(article) }}
+                secondaryAction={{ content: "Keep this version", onAction: () => setShowSyncBanner(false) }}
+                onDismiss={() => setShowSyncBanner(false)}
+              >
+                <p>
+                  {`It was edited in Shopify on ${new Date(article.updatedAt).toLocaleString()}, after your last save here. `}
+                  Loading it replaces the content below with Shopify&apos;s version (you can undo). If you keep this
+                  version, updating the post will overwrite the changes made in Shopify.
+                </p>
+              </Banner>
+            </div>
+          )}
+
           {(bannerError || blogsError) && (
             <div style={{ marginBottom: 16 }}>
               <Banner
@@ -472,6 +526,9 @@ export default function BlogEditor() {
           <div role="tabpanel" id={`bb-panel-${tab}`}>
             {tab === "settings" ? (
               <PostSettings
+                linked={Boolean(post.articleId)}
+                syncing={syncFetcher.state !== "idle"}
+                onPullFromShopify={pullFromShopify}
                 post={doc.post}
                 blogs={blogs}
                 shopName={shopName}
@@ -871,13 +928,25 @@ function SaveIndicator({ state, savedAt, dirty }) {
 
 // ─── Post settings ───────────────────────────────────────────────────────────
 
-function PostSettings({ post, blogs, shopName, storeUrl, onChange, onError }) {
+function PostSettings({ linked, syncing, onPullFromShopify, post, blogs, shopName, storeUrl, onChange, onError }) {
   const blog = blogs.find((entry) => entry.id === post.blogId);
   const handle = post.handle || slugifyHandle(post.title);
   const seoTitle = post.seoTitle || post.title;
   const seoDescription = post.seoDescription || post.summary;
   return (
     <div className="bb-settings">
+      {linked && (
+        <div className="fb-card">
+          <h2 className="fb-publish-title">Sync with Shopify</h2>
+          <p className="fb-help" style={{ marginBottom: 12 }}>
+            Edited this post in Shopify&apos;s own blog editor? Load its latest content and details here. Your design
+            settings are kept, and you can undo.
+          </p>
+          <Button loading={syncing} onClick={onPullFromShopify}>
+            Load latest from Shopify
+          </Button>
+        </div>
+      )}
       <div className="fb-card">
         <h2 className="fb-publish-title">Basics</h2>
         <div className="fb-panel__stack">
