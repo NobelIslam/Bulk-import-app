@@ -8,42 +8,8 @@
   font-size: 12px;
 }
 
-/* ─── Beginner guide ───────────────────────────────────────────────────────── */
+/* ─── Drag status bar ─────────────────────────────────────────────────────── */
 
-.bb-guide {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.bb-guide__step {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 12px;
-  background: #ffffff;
-  border: 1px solid var(--fb-border);
-  border-radius: 10px;
-  font-size: 13px;
-  color: var(--fb-subdued);
-}
-.bb-guide__step strong {
-  display: block;
-  color: var(--fb-text);
-  font-size: 14px;
-}
-.bb-guide__num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--fb-blue-tint);
-  color: var(--fb-blue);
-  font-weight: 700;
-  flex-shrink: 0;
-}
 .bb-dragbar {
   position: sticky;
   top: 0;
@@ -71,14 +37,6 @@
 }
 .bb-stage--mobile .bb-page {
   max-width: 390px !important;
-}
-.bb-title-preview {
-  max-width: var(--bb-width, 760px);
-  margin: 0 auto 24px;
-  font-size: 34px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: #b5b5b5;
 }
 .bb-page {
   color: #303030;
@@ -131,8 +89,22 @@
   cursor: pointer;
   transition: outline-color 0.1s ease;
 }
+/* Outlines mode: every element shows its edges, so it's clear what was added
+   and where each element starts and ends. Layout containers use a stronger
+   tint than content elements. */
+.bb-stage--outlines .bb-block {
+  outline: 1px dashed #b7c4d6;
+}
+.bb-stage--outlines .bb-block--container {
+  outline: 1px dashed #8fa6c6;
+}
+.bb-stage--outlines .bb-col {
+  outline: 1px dotted #c8d3e2;
+  outline-offset: -1px;
+}
 .bb-block:hover:not(:has(.bb-block:hover)) {
-  outline: 1px dashed var(--fb-blue);
+  outline: 2px solid var(--fb-blue);
+  outline-offset: -2px;
 }
 .bb-block--selected,
 .bb-block--selected:hover:not(:has(.bb-block:hover)) {
@@ -374,11 +346,6 @@
   max-width: 100%;
 }
 
-@media (max-width: 1280px) {
-  .bb-guide {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* ─── Column resizing ──────────────────────────────────────────────────────── */
 

@@ -22,6 +22,7 @@ import {
   DragHandleIcon,
   EditIcon,
   ExternalIcon,
+  HideIcon,
   MobileIcon,
   RedoIcon,
   SettingsIcon,
@@ -191,6 +192,7 @@ export default function BlogEditor() {
 
   const [tab, setTab] = useState("build");
   const [viewport, setViewport] = useState("desktop");
+  const [showOutlines, setShowOutlines] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeDrag, setActiveDrag] = useState(null);
   const [saveState, setSaveState] = useState("idle");
@@ -479,15 +481,16 @@ export default function BlogEditor() {
               />
             ) : (
               <>
-                {activeDrag ? (
+                {activeDrag && (
                   <div className="bb-dragbar" role="status">
                     <DragDropIcon width={20} height={20} fill="currentColor" aria-hidden="true" />
                     Drop “{activeDrag.label}” on a blue line or a dashed box. Release anywhere else to cancel.
                   </div>
-                ) : (
-                  tab === "build" && <Guide />
                 )}
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <Button icon={showOutlines ? ViewIcon : HideIcon} pressed={showOutlines} onClick={() => setShowOutlines((value) => !value)}>
+                    Outlines
+                  </Button>
                   <ButtonGroup variant="segmented">
                     <Button icon={DesktopIcon} pressed={viewport === "desktop"} onClick={() => setViewport("desktop")}>
                       Desktop
@@ -499,13 +502,10 @@ export default function BlogEditor() {
                 </div>
                 {/* Clicking empty canvas space clears the selection. */}
                 {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-                <div className={`bb-stage${viewport === "mobile" ? " bb-stage--mobile" : ""}`} onClick={() => select(null)}>
-                  <div
-                    className="bb-title-preview"
-                    style={{ "--bb-width": doc.design.contentWidth ? `${Math.min(doc.design.contentWidth, viewport === "mobile" ? 390 : 9999)}px` : "100%" }}
-                  >
-                    {doc.post.title}
-                  </div>
+                <div
+                  className={`bb-stage${viewport === "mobile" ? " bb-stage--mobile" : ""}${showOutlines ? " bb-stage--outlines" : ""}`}
+                  onClick={() => select(null)}
+                >
                   <div className="bb-page" style={pageStyle(doc.design)}>
                     <BlockList containerId={ROOT} blocks={doc.blocks} ctx={canvasCtx} root />
                   </div>
@@ -867,27 +867,6 @@ function SaveIndicator({ state, savedAt, dirty }) {
   if (dirty) return <span className="fb-save-state">Unsaved changes</span>;
   if (savedAt) return <span className="fb-save-state">Saved {savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>;
   return <span className="fb-save-state">All changes saved</span>;
-}
-
-function Guide() {
-  const steps = [
-    ["Drag or click", "Pick an element or ready-made layout on the left."],
-    ["Drop on a blue line", "Lines appear between elements while you drag. Dashed boxes are empty spots."],
-    ["Click to customize", "Select anything on the page to edit it on the right, then Publish."],
-  ];
-  return (
-    <div className="bb-guide">
-      {steps.map(([title, text], index) => (
-        <div key={title} className="bb-guide__step">
-          <span className="bb-guide__num">{index + 1}</span>
-          <div>
-            <strong>{title}</strong>
-            {text}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 // ─── Post settings ───────────────────────────────────────────────────────────
