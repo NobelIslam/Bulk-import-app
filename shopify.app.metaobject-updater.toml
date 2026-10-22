@@ -3,7 +3,7 @@
 client_id = "adda1b764d184c73ba4e4df2161c68e5"
 application_url = "https://bulk-importer-app.onrender.com"
 embedded = true
-name = "Metaobject Updater"
+name = "Storeloom"
 
 [build]
 automatically_update_urls_on_dev = true

@@ -23,7 +23,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { listActivity } from "../activity.server";
 
-const APP_NAME = "Metaobject Updater";
+const APP_NAME = "Storeloom";
 
 // External help links. Leave one empty to open the in-app getting started
 // guide instead, so no button ever leads to a dead page.
