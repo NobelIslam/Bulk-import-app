@@ -23,7 +23,7 @@ export default function App() {
           <s-link href="/app" rel="home">Home</s-link>
           <s-link href="/app/blog">Blog Builder</s-link>
           <s-link href="/app/page-importer">Page Importer</s-link>
-          <s-link href="/app/metaobjects">Metaobject Editor</s-link>
+          <s-link href="/app/metaobjects">Metaobject & Metafields Editor</s-link>
           <s-link href="/app/forms">Form Builder</s-link>
           <s-link href="/app/submissions">Form Submissions</s-link>
         </s-app-nav>

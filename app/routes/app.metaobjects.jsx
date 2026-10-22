@@ -453,7 +453,7 @@ export default function BulkEditor() {
   return (
     <Page
       fullWidth
-      title="Metaobject Editor"
+      title="Metaobject & Metafields Editor"
       subtitle="Bulk edit your store's metaobjects and metafields. Make changes directly in the table or import/export via CSV."
       primaryAction={{
         content: "Save changes",

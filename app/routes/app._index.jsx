@@ -45,11 +45,11 @@ const GROUPS = [
         action: "Import pages",
       },
       {
-        name: "Metaobject Editor",
+        name: "Metaobject & Metafields Editor",
         url: "/app/metaobjects",
         icon: DatabaseIcon,
         description: "Bulk edit metaobjects and the metafields of products, collections, pages and blog posts in one grid, with CSV import and export.",
-        action: "Edit metaobjects",
+        action: "Edit metaobjects & metafields",
       },
     ],
   },
