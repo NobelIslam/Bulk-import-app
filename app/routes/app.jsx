@@ -17,12 +17,15 @@ export default function App() {
   return (
     <ShopifyAppProvider embedded apiKey={apiKey}>
       <PolarisAppProvider i18n={{}}>
+        {/* The app name in the admin sidebar opens Home. Links are ordered by
+            group (Shopify's app nav has no group headings): Content, then Forms. */}
         <s-app-nav>
-          <s-link href="/app">Bulk Page Importer</s-link>
+          <s-link href="/app" rel="home">Home</s-link>
+          <s-link href="/app/blog">Blog Editor</s-link>
+          <s-link href="/app/page-importer">Page Importer</s-link>
           <s-link href="/app/metaobjects">Metaobject Editor</s-link>
           <s-link href="/app/forms">Forms</s-link>
           <s-link href="/app/submissions">Submissions</s-link>
-          <s-link href="/app/blog">Blog Editor</s-link>
         </s-app-nav>
         <Outlet />
       </PolarisAppProvider>
