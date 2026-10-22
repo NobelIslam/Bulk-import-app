@@ -166,6 +166,36 @@ export function walk(blocks, fn, containerId = ROOT, depth = 0) {
   });
 }
 
+// What the posts list shows for a post: the featured image (or the first
+// image in the design), the summary (or the opening text) and the author.
+export function postSummary(doc) {
+  const post = doc?.post || {};
+  const blocks = Array.isArray(doc?.blocks) ? doc.blocks : [];
+  let image = post.image || "";
+  let text = String(post.summary || "").trim();
+  walk(blocks, (block) => {
+    if (!image && block.type === "image" && block.props?.url) image = block.props.url;
+    if (!text && (block.type === "text" || block.type === "quote") && block.props?.html) {
+      text = String(block.props.html)
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+  });
+  return {
+    image,
+    excerpt: text.length > 140 ? `${text.slice(0, 139).trimEnd()}…` : text,
+    author: String(post.author || "").trim(),
+    blogId: post.blogId || "",
+  };
+}
+
 export function countBlocks(blocks) {
   let total = 0;
   walk(blocks, () => {

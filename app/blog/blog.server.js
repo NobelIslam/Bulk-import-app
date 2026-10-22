@@ -1,22 +1,30 @@
 import db from "../db.server";
-import { docFromTemplate, normalizeDoc, renderDocHtml, summaryHtml } from "./blocks";
+import { docFromTemplate, normalizeDoc, postSummary, renderDocHtml, summaryHtml } from "./blocks";
 
 // Every query is scoped by `shop`, which always comes from the admin session.
 
 export async function listPosts(shop) {
-  return db.blogPost.findMany({
+  const rows = await db.blogPost.findMany({
     where: { shop },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
       title: true,
       status: true,
+      doc: true,
+      blogId: true,
       blogHandle: true,
       articleHandle: true,
       articleId: true,
       publishedAt: true,
+      createdAt: true,
       updatedAt: true,
     },
+  });
+  // The full design stays on the server; the list only needs its summary.
+  return rows.map(({ doc, ...row }) => {
+    const summary = postSummary(doc);
+    return { ...row, ...summary, blogId: row.blogId || summary.blogId };
   });
 }
 

@@ -12,6 +12,7 @@ import {
   LAYOUT_PRESETS,
   moveBlock,
   normalizeDoc,
+  postSummary,
   POST_TEMPLATES,
   removeBlock,
   renderDocHtml,
@@ -143,4 +144,27 @@ test("column widths: set, resize, add and remove keep a 100% row", async () => {
   assert.match(html, /flex-wrap:nowrap/);
   assert.match(html, /background:#ff0000/);
   assert.match(html, /justify-content:center/);
+});
+
+test("postSummary uses the first image and opening text when the post has no featured image or summary", () => {
+  const doc = docFromTemplate("article");
+  const columns = getLayoutPreset("imageText").build();
+  columns.props.columns[0].blocks[0].props.url = "https://cdn.shopify.com/a.jpg";
+  doc.blocks = [
+    { ...defaultBlock("text"), props: { ...defaultBlock("text").props, html: "<p>Hello&nbsp;<strong>world</strong> &amp; friends</p>" } },
+    columns,
+  ];
+  doc.post.author = "  Maria Khan ";
+  const summary = postSummary(doc);
+  assert.equal(summary.image, "https://cdn.shopify.com/a.jpg");
+  assert.equal(summary.excerpt, "Hello world & friends");
+  assert.equal(summary.author, "Maria Khan");
+
+  doc.post.image = "https://cdn.shopify.com/featured.jpg";
+  doc.post.summary = "x".repeat(200);
+  const preferred = postSummary(doc);
+  assert.equal(preferred.image, "https://cdn.shopify.com/featured.jpg");
+  assert.equal(preferred.excerpt.length, 140);
+  assert.ok(preferred.excerpt.endsWith("…"));
+  assert.deepEqual(postSummary(null), { image: "", excerpt: "", author: "", blogId: "" });
 });
