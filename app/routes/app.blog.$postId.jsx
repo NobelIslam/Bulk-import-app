@@ -432,7 +432,7 @@ export default function BlogEditor() {
 
         <main className="fb-main">
           <nav className="fb-breadcrumb" aria-label="Breadcrumb">
-            <Link to="/app/blog">Blog Editor</Link>
+            <Link to="/app/blog">Blog Builder</Link>
             <ChevronRightIcon width={16} height={16} fill="currentColor" aria-hidden="true" />
             <span className="fb-breadcrumb__current">{doc.post.title}</span>
           </nav>

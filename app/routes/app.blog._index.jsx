@@ -156,7 +156,7 @@ export default function BlogPosts() {
 
   return (
     <Page
-      title="Blog Editor"
+      title="Blog Builder"
       subtitle="Design blog posts with drag and drop, then publish them straight to your Shopify blog."
       primaryAction={{ content: "Create post", icon: PlusIcon, onAction: () => setCreating(true) }}
     >

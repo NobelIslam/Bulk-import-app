@@ -26,14 +26,14 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const GROUPS = [
   {
     title: "Content",
-    description: "Create and edit your store's pages, blog posts and custom content.",
+    description: "Build blog posts, import pages in bulk and edit your store's custom content.",
     tools: [
       {
-        name: "Blog Editor",
+        name: "Blog Builder",
         url: "/app/blog",
         icon: BlogIcon,
         description: "Design blog posts with drag and drop and publish them straight to your Shopify blog.",
-        action: "Open Blog Editor",
+        action: "Open Blog Builder",
         stat: ({ posts, published }) =>
           posts === null ? null : `${posts} post${posts === 1 ? "" : "s"} · ${published} published`,
       },
@@ -55,18 +55,18 @@ const GROUPS = [
   },
   {
     title: "Forms",
-    description: "Build forms for your store and manage the responses they collect.",
+    description: "Build forms for your storefront and manage the responses they collect.",
     tools: [
       {
-        name: "Forms",
+        name: "Form Builder",
         url: "/app/forms",
         icon: FormsIcon,
         description: "Build contact, newsletter, quote and other forms with drag and drop, then add them to your theme.",
-        action: "Open Forms",
+        action: "Open Form Builder",
         stat: ({ forms, liveForms }) => (forms === null ? null : `${plural(forms, "form")} · ${liveForms} published`),
       },
       {
-        name: "Submissions",
+        name: "Form Submissions",
         url: "/app/submissions",
         icon: EnvelopeIcon,
         description: "Read, search and manage every response your forms collect.",

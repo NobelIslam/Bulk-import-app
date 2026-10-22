@@ -212,7 +212,7 @@ export default function Submissions() {
   const rangeEnd = Math.min(page * pageSize, total);
 
   return (
-    <Page title="Submissions" subtitle="Review form responses collected from your storefront.">
+    <Page title="Form Submissions" subtitle="Review form responses collected from your storefront.">
       <BlockStack gap="400">
         <Card>
           <InlineStack gap="300" wrap align="end">

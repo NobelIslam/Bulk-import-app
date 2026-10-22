@@ -33,7 +33,7 @@ export default function NewForm() {
   return (
     <Page
       title="Create a form"
-      backAction={{ content: "Forms", url: "/app/forms" }}
+      backAction={{ content: "Form Builder", url: "/app/forms" }}
       subtitle="Start from a template or build from scratch — everything stays editable afterwards."
     >
       {navigation.state !== "idle" && (

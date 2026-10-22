@@ -142,7 +142,7 @@ export default function FormsIndex() {
 
   return (
     <Page
-      title="Forms"
+      title="Form Builder"
       subtitle={`Build forms, publish them to your theme and collect submissions.`}
       primaryAction={{ content: "Create form", icon: PlusIcon, onAction: () => navigate("/app/forms/new") }}
     >

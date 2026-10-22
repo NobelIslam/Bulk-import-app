@@ -406,7 +406,7 @@ export default function FormBuilder() {
 
         <main className="fb-main">
           <nav className="fb-breadcrumb" aria-label="Breadcrumb">
-            <Link to="/app/forms">Forms</Link>
+            <Link to="/app/forms">Form Builder</Link>
             <ChevronRightIcon width={16} height={16} fill="currentColor" aria-hidden="true" />
             <span className="fb-breadcrumb__current">{doc.name}</span>
           </nav>
@@ -1044,7 +1044,7 @@ function PublishPanel({ form, shop, apiKey, published, busy, onPublish, onUnpubl
           <div>
             <strong>Save the theme and collect responses</strong>
             <p className="fb-help">
-              Submissions appear on the <Link to={`/app/submissions?formId=${form.id}`}>Submissions</Link> page.
+              Submissions appear on the <Link to={`/app/submissions?formId=${form.id}`}>Form Submissions</Link> page.
               {` This form has ${form.submissionCount.toLocaleString()} so far.`}
             </p>
           </div>
