@@ -48,7 +48,7 @@ const GROUPS = [
         name: "Metaobject Editor",
         url: "/app/metaobjects",
         icon: DatabaseIcon,
-        description: "Edit metaobject entries in bulk in a spreadsheet-style grid, with CSV export and import.",
+        description: "Bulk edit metaobjects and the metafields of products, collections, pages and blog posts in one grid, with CSV import and export.",
         action: "Edit metaobjects",
       },
     ],
