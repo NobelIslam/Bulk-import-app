@@ -37,6 +37,7 @@ import {
 import "@shopify/polaris/build/esm/styles.css";
 import "../components/bulk/bulk.css";
 import { authenticate } from "../shopify.server";
+import { logActivity } from "../activity.server";
 import { listSources, loadSource, saveChanges, sourceColumns } from "../bulk/sources.server";
 import { coerceValue, parseSource, rowErrors, STATUS_LABELS, validateValue } from "../bulk/fields";
 import { STATUS_KEY } from "../bulk/keys";
@@ -72,7 +73,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const source = parseSource(formData.get("source"));
   let updates = [];
@@ -86,7 +87,10 @@ export const action = async ({ request }) => {
     const listing = await listSources(admin);
     const columns = await sourceColumns(admin, source, listing.definitions);
     if (!columns) return { success: [], errors: updates.map((u) => ({ id: u.id, errors: [{ message: "This metaobject type no longer exists." }] })) };
-    return await saveChanges(admin, source, updates, columns);
+    const result = await saveChanges(admin, source, updates, columns);
+    const label = listing.sources.find((entry) => entry.value === formData.get("source"))?.label || "";
+    await logActivity(session.shop, "bulk_saved", { label: `${source.kind}:${label}`, count: result.success.length });
+    return result;
   } catch (error) {
     return { success: [], errors: updates.map((u) => ({ id: u.id, errors: [{ message: error.message || "Request failed." }] })) };
   }

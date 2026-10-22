@@ -30,6 +30,7 @@ import {
   ViewIcon,
 } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
+import { logActivity } from "../activity.server";
 import { getArticle, getPost, listBlogs, publishPost, savePost, unpublishPost } from "../blog/blog.server";
 import { mergeArticleIntoDoc } from "../blog/import";
 import {
@@ -121,7 +122,9 @@ export const action = async ({ request, params }) => {
     }
     if (intent === "publish") {
       if (!doc) return { ok: false, intent, message: "Couldn't read the post. Reload and try again." };
-      return { intent, ...(await publishPost(admin, session.shop, params.postId, doc, { publish: true })) };
+      const result = await publishPost(admin, session.shop, params.postId, doc, { publish: true });
+      if (result.ok) await logActivity(session.shop, "blog_published", { label: String(doc.post?.title || "").slice(0, 200) });
+      return { intent, ...result };
     }
     if (intent === "unpublish") {
       return { intent, ...(await unpublishPost(admin, session.shop, params.postId)) };

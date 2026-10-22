@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { logActivity } from "../activity.server";
 import { parseCSVRows } from "../utils/csv";
 import ProgressBar from "../components/ProgressBar";
 import SummaryCard from "../components/SummaryCard";
@@ -15,7 +16,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const pagesJson = formData.get("pages");
 
@@ -81,6 +82,7 @@ export const action = async ({ request }) => {
     }
   }
 
+  await logActivity(session.shop, "pages_imported", { count: results.success.length });
   return results;
 };
 

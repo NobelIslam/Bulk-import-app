@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { authenticate } from "../shopify.server";
+import { logActivity } from "../activity.server";
 import { getPublishedForm, createSubmission, countSubmissionsThisMonth } from "../forms/forms.server";
 import { checkSubmissionLimit } from "../config/limits.server";
 import { isHoneypotTripped, validateSubmission } from "../forms/schema.server";
@@ -115,6 +116,7 @@ export async function action({ request, params }) {
     },
     ipHash: hashIp(request),
   });
+  await logActivity(shop, "submissions_received", { label: form.name });
 
   return json({ ok: true, message: form.schema?.settings?.successMessage || "Thanks!" });
 }

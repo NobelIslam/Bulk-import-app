@@ -114,3 +114,18 @@ model BlogPost {
 
   @@index([shop, updatedAt])
 }
+
+// Recent events shown on the Home page ("Imported 12 pages", "Published a blog
+// post"…). Repeated events of the same kind merge into one row.
+model ActivityLog {
+  id        String   @id @default(cuid())
+  shop      String
+  // pages_imported | bulk_saved | blog_published | form_created | form_published | submissions_received
+  kind      String
+  label     String   @default("")
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shop, updatedAt])
+}

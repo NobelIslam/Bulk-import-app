@@ -20,6 +20,7 @@ import {
 import { DeleteIcon, DuplicateIcon, EditIcon, PlusIcon } from "@shopify/polaris-icons";
 import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
+import { logActivity } from "../activity.server";
 import {
   deleteForm,
   duplicateForm,
@@ -66,6 +67,7 @@ export const action = async ({ request }) => {
 
   if (intent === "publish" || intent === "unpublish") {
     const form = await setFormStatus(session.shop, String(formId), intent === "publish" ? "PUBLISHED" : "DRAFT");
+    if (form && intent === "publish") await logActivity(session.shop, "form_published", { label: form.name });
     return {
       ok: Boolean(form),
       message: intent === "publish" ? "Form published." : "Form unpublished.",

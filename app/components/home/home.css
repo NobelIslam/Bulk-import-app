@@ -1,0 +1,407 @@
+/* App Home page. */
+
+.hm {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: #303030;
+}
+.hm h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+.hm-sub {
+  margin: 2px 0 12px;
+  color: #616161;
+  font-size: 13px;
+}
+
+/* ─── Hero ─────────────────────────────────────────────────────────────────── */
+
+.hm-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 220px;
+  padding: 32px 28px;
+  border: 1px solid #dfe6f3;
+  border-radius: 16px;
+  background: linear-gradient(110deg, #ffffff 0%, #f5f8fd 45%, #e9f0fb 100%);
+  overflow: hidden;
+}
+.hm-hero__text {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+}
+.hm-eyebrow {
+  margin: 0 0 8px;
+  color: #2c6ecb;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hm-hero h1 {
+  margin: 0 0 10px;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+.hm-hero p {
+  margin: 0 0 20px;
+  color: #4a4a4a;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.hm-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.hm-art {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  width: 360px;
+  height: 200px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.hm-art__blob {
+  position: absolute;
+  inset: -40px -60px -40px 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 60% 50%, rgba(44, 110, 203, 0.12), transparent 65%);
+}
+.hm-art__card {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 200px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 30px rgba(31, 59, 99, 0.12);
+}
+.hm-art__card:nth-child(2) {
+  top: 0;
+  left: 110px;
+  transform: rotate(6deg);
+}
+.hm-art__card:nth-child(3) {
+  top: 70px;
+  left: 0;
+  transform: rotate(-4deg);
+}
+.hm-art__card:nth-child(4) {
+  top: 110px;
+  left: 160px;
+  transform: rotate(5deg);
+}
+.hm-art__lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+}
+.hm-art__lines span {
+  height: 7px;
+  border-radius: 4px;
+  background: #e1e6ee;
+}
+.hm-art__lines span + span {
+  width: 70%;
+}
+@media (max-width: 1100px) {
+  .hm-art {
+    display: none;
+  }
+}
+
+/* ─── Shared tile icon ─────────────────────────────────────────────────────── */
+
+.hm-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.hm-tile svg {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+}
+.hm-tile--sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.hm-tile--sm svg {
+  width: 20px;
+  height: 20px;
+}
+.hm-tile--purple {
+  background: #efeafe;
+  color: #6d4ad8;
+}
+.hm-tile--green {
+  background: #e3f6ea;
+  color: #13804c;
+}
+.hm-tile--blue {
+  background: #e4eefd;
+  color: #2c6ecb;
+}
+.hm-tile--orange {
+  background: #fff0e0;
+  color: #d0640c;
+}
+.hm-tile--pink {
+  background: #fde8ef;
+  color: #c4245f;
+}
+
+/* ─── Quick actions ────────────────────────────────────────────────────────── */
+
+.hm-quick {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1250px) {
+  .hm-quick {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .hm-quick {
+    grid-template-columns: 1fr;
+  }
+}
+.hm-quick__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e3e3e3;
+  border-radius: 12px;
+  background: #ffffff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.hm-quick__item:hover {
+  border-color: #c9cccf;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.hm-quick__item:focus-visible {
+  outline: 2px solid #2c6ecb;
+  outline-offset: 2px;
+}
+.hm-quick__text {
+  flex: 1;
+  min-width: 0;
+}
+.hm-quick__text strong {
+  display: block;
+  font-size: 14px;
+}
+.hm-quick__text span {
+  display: block;
+  margin-top: 2px;
+  color: #616161;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.hm-quick__chev {
+  width: 18px;
+  height: 18px;
+  fill: #616161;
+  flex-shrink: 0;
+}
+
+/* ─── Two-column body ──────────────────────────────────────────────────────── */
+
+.hm-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .hm-body {
+    grid-template-columns: 1fr;
+  }
+}
+.hm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+.hm-tools {
+  display: grid;
+  gap: 12px;
+}
+.hm-tools--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.hm-tools--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .hm-tools--3,
+  .hm-tools--2 {
+    grid-template-columns: 1fr;
+  }
+}
+.hm-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 190px;
+  padding: 18px;
+  border: 1px solid #e3e3e3;
+  border-radius: 12px;
+  background: #ffffff;
+}
+.hm-tool__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.hm-tool__text {
+  flex: 1;
+  min-width: 0;
+}
+.hm-tool__head strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+}
+.hm-tool__head p {
+  margin: 4px 0 0;
+  color: #616161;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.hm-tool__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+.hm-tool__stat {
+  font-size: 13px;
+  color: #303030;
+}
+
+/* ─── Side cards ───────────────────────────────────────────────────────────── */
+
+.hm-side {
+  padding: 18px;
+  border: 1px solid #e3e3e3;
+  border-radius: 12px;
+  background: #ffffff;
+}
+.hm-side__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.hm-activity {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hm-activity li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f1f1;
+}
+.hm-activity li:last-child {
+  border-bottom: 0;
+}
+.hm-activity strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+.hm-activity span.hm-when {
+  color: #616161;
+  font-size: 12px;
+}
+.hm-empty {
+  padding: 16px 0;
+  color: #616161;
+  font-size: 13px;
+}
+.hm-help {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid #f1f1f1;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.hm-help:last-child {
+  border-bottom: 0;
+}
+.hm-help:hover strong {
+  text-decoration: underline;
+}
+.hm-help > div {
+  flex: 1;
+  min-width: 0;
+}
+.hm-help strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.hm-help span {
+  color: #616161;
+  font-size: 12px;
+}
+.hm-help svg.hm-help__ext {
+  width: 18px;
+  height: 18px;
+  fill: #616161;
+  flex-shrink: 0;
+}
+
+/* Getting started guide */
+.hm-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hm-guide__step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.hm-guide__step p {
+  margin: 4px 0 8px;
+  color: #616161;
+  font-size: 13px;
+  line-height: 1.5;
+}

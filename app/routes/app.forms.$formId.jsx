@@ -41,6 +41,7 @@ import {
   ViewIcon,
 } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
+import { logActivity } from "../activity.server";
 import { getForm, getFormSubmissionCounts, setFormStatus, updateForm } from "../forms/forms.server";
 import { defaultField, getFieldType, normalizeSchema, splitColumns, WIDTH_OPTIONS } from "../forms/fields";
 import { DEFAULT_DESKTOP_STYLE, resolveStyle } from "../forms/design";
@@ -137,6 +138,7 @@ export const action = async ({ request, params }) => {
 
     if (intent === "publish") {
       await setFormStatus(session.shop, params.formId, "PUBLISHED");
+      await logActivity(session.shop, "form_published", { label: updated.name });
       return { ok: true, intent, message: "Form published." };
     }
     return { ok: true, intent, message: "Changes saved." };

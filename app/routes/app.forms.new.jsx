@@ -3,6 +3,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { Banner, BlockStack, Page } from "@shopify/polaris";
 import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
+import { logActivity } from "../activity.server";
 import { createForm } from "../forms/forms.server";
 import { getTemplate, getTemplateCategories } from "../forms/templates";
 import TemplatePicker from "../components/forms/TemplatePicker";
@@ -22,6 +23,7 @@ export const action = async ({ request }) => {
     return { error: form.error };
   }
 
+  await logActivity(session.shop, "form_created", { label: form.name });
   // This is a real <Form> post, so the redirect takes the merchant to the builder.
   return redirect(`/app/forms/${form.id}`);
 };
